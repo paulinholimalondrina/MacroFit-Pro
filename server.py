@@ -4,6 +4,8 @@ import os
 import time
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
 import httpx
 
 app = FastAPI(title="MacroFit Hybrid TACO + FatSecret API")
@@ -18,9 +20,6 @@ app.add_middleware(
 
 DB_PATH = "alimentos_cache.db"
 
-# ==============================================================================
-# CONFIGURAÇÃO DAS CHAVES FATSECRET INSERIDAS
-# ==============================================================================
 FATSECRET_CLIENT_ID = os.getenv("FATSECRET_CLIENT_ID", "fe6063cade4b4ca3ba6487f3d521c556")
 FATSECRET_CLIENT_SECRET = os.getenv("FATSECRET_CLIENT_SECRET", "a4833d40ca15452392896fb1efa1bc64")
 
@@ -29,17 +28,21 @@ token_cache = {
     "expires_at": 0
 }
 
+class AlimentoManual(BaseModel):
+    nome: str
+    marca: Optional[str] = "Manual"
+    calorias: float
+    proteinas: float
+    carboidratos: float
+    gorduras: float
+
 def remover_acentos(texto: str) -> str:
     if not texto:
         return ""
     nfkd = unicodedata.normalize('NFKD', str(texto))
     return "".join([c for c in nfkd if not unicodedata.combining(c)]).lower().strip()
 
-# ==============================================================================
-# BASE TACO & ESSENCIAIS BRASILEIROS EMBUTIDOS
-# ==============================================================================
 BASE_TACO_EXPANDIDA = [
-    # Vegetais, Legumes e Frutas
     ("Brócolis Cozido", "Hortifrúti / TACO", 25.0, 2.1, 4.4, 0.5),
     ("Brócolis Cru", "Hortifrúti / TACO", 25.0, 3.6, 4.0, 0.3),
     ("Couve-Flor Cozida", "Hortifrúti / TACO", 19.0, 1.2, 3.9, 0.2),
@@ -61,8 +64,6 @@ BASE_TACO_EXPANDIDA = [
     ("Melancia Crua", "Fruta / TACO", 33.0, 0.9, 8.1, 0.0),
     ("Manga Tommy Crua", "Fruta / TACO", 51.0, 0.5, 12.8, 0.2),
     ("Uva Niágara Crua", "Fruta / TACO", 53.0, 0.7, 13.6, 0.2),
-
-    # Carnes, Aves, Peixes e Ovos
     ("Peito de Frango Grelhado", "Aves / TACO", 159.0, 32.0, 0.0, 2.5),
     ("Peito de Frango Cozido Desfiado", "Aves / TACO", 163.0, 31.5, 0.0, 3.2),
     ("Sobrecoxa de Frango sem Pele Grelhada", "Aves / TACO", 167.0, 28.8, 0.0, 5.0),
@@ -78,8 +79,6 @@ BASE_TACO_EXPANDIDA = [
     ("Ovo de Galinha Inteiro Cozido", "Ovos / TACO", 146.0, 13.3, 0.6, 9.5),
     ("Clara de Ovo Cozida", "Ovos / TACO", 52.0, 11.0, 0.7, 0.2),
     ("Ovo de Galinha Frito", "Preparo Caseiro", 240.0, 15.6, 1.2, 18.6),
-
-    # Grãos, Cereais e Leguminosas
     ("Arroz Branco Cozido", "Cereais / TACO", 128.0, 2.5, 28.1, 0.2),
     ("Arroz Integral Cozido", "Cereais / TACO", 124.0, 2.6, 25.8, 1.0),
     ("Feijão Carioca Cozido (50% Grão 50% Caldo)", "Leguminosas / TACO", 76.0, 4.8, 13.6, 0.5),
@@ -93,8 +92,6 @@ BASE_TACO_EXPANDIDA = [
     ("Pão Francês Tradicional", "Padaria / TACO", 300.0, 8.0, 58.7, 3.1),
     ("Goma de Tapioca Hidratada", "Típico", 240.0, 0.1, 60.0, 0.0),
     ("Macarrão de Sêmola Cozido", "Massas / TACO", 140.0, 4.6, 28.8, 0.5),
-
-    # Laticínios e Derivados
     ("Leite Integral UHT", "Piracanjuba", 61.0, 3.1, 4.7, 3.2),
     ("Leite Desnatado UHT", "Piracanjuba", 35.0, 3.2, 4.9, 0.0),
     ("Leite Semidesnatado UHT", "Piracanjuba", 46.0, 3.1, 4.8, 1.5),
@@ -114,8 +111,6 @@ BASE_TACO_EXPANDIDA = [
     ("Iogurte Natural Integral", "Nestlé", 66.0, 3.8, 4.8, 3.6),
     ("Leite em Pó Integral Ninho", "Nestlé", 497.0, 25.0, 39.0, 27.0),
     ("Leite em Pó Desnatado Molico", "Nestlé", 350.0, 34.0, 52.0, 0.5),
-
-    # Suplementos e Marcas Populares
     ("100% Whey Concentrate", "Growth Supplements", 400.0, 80.0, 9.0, 5.0),
     ("100% Whey Isolate", "Growth Supplements", 365.0, 90.0, 2.0, 0.5),
     ("Creatina Creapure 100% Pura", "Growth Supplements", 0.0, 0.0, 0.0, 0.0),
@@ -157,7 +152,6 @@ def init_db():
 init_db()
 
 async def obter_token_fatsecret():
-    """Gera ou reaproveita o token OAuth2 da FatSecret."""
     agora = time.time()
     if token_cache["access_token"] and token_cache["expires_at"] > agora:
         return token_cache["access_token"]
@@ -186,13 +180,24 @@ async def obter_token_fatsecret():
 def home():
     return {"status": "ok", "mensagem": "MacroFit API Híbrida (TACO + FatSecret) Ativa"}
 
+@app.post("/api/alimentos")
+def salvar_alimento_manual(item: AlimentoManual):
+    """Cadastra um alimento manualmente no SQLite do servidor."""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
+            VALUES (?, ?, ?, ?, ?, ?, 'MANUAL')
+        """, (item.nome.strip(), item.marca.strip(), round(item.calorias, 1), round(item.proteinas, 1), round(item.carboidratos, 1), round(item.gorduras, 1)))
+        conn.commit()
+    return {"status": "sucesso", "mensagem": "Alimento cadastrado no banco com sucesso!"}
+
 @app.get("/api/alimentos")
 async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome do alimento ou marca")):
     termo_limpo = remover_acentos(q)
     palavras_busca = termo_limpo.split()
     resultados_locais = []
 
-    # 1. Busca primeiro em toda a base TACO / Cache Local (Instantânea, sem acento)
     try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
@@ -208,11 +213,9 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
     except Exception as e:
         print(f"Erro na consulta local: {e}")
 
-    # Se já tem 8 ou mais itens locais, retorna de imediato
     if len(resultados_locais) >= 8:
         return {"origem": "taco_local", "total": len(resultados_locais), "itens": resultados_locais}
 
-    # 2. Consulta à API FatSecret Brasil
     token = await obter_token_fatsecret()
     novos_itens = []
 
@@ -241,7 +244,6 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
                             marca = (f.get("brand_name") or "Genérico").strip()
                             desc = f.get("food_description", "")
 
-                            # Extração dos macronutrientes da descrição retornada
                             kcal = prot = carb = fat = 0.0
                             partes = desc.split("-")[-1].split("|")
                             for p in partes:
@@ -276,7 +278,6 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
         except Exception as e:
             print(f"Erro na busca FatSecret: {e}")
 
-    # Mescla base TACO local com as novidades da FatSecret
     nomes_vistos = set()
     resultado_final = []
     for item in resultados_locais + novos_itens:
