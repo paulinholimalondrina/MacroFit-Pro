@@ -1,909 +1,123 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MacroFit Pro - Calculadora de Macronutrientes</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-  </style>
-</head>
-<body class="bg-slate-950 text-slate-100 min-h-screen pb-16 antialiased selection:bg-emerald-500 selection:text-white">
+import sqlite3
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+import httpx
 
-  <!-- Cabeçalho & Barra Superior -->
-  <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-          <i class="fa-solid fa-fire text-slate-950 text-xl font-bold"></i>
-        </div>
-        <div>
-          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">MacroFit Pro</h1>
-          <p class="text-xs text-slate-400">Nutrição & Controle de Metas</p>
-        </div>
-      </div>
+app = FastAPI(title="MacroFit Proxy & Cache API")
 
-      <div class="flex items-center gap-2">
-        <button onclick="abrirModalConfig()" title="Configurar Servidor / Backend" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition flex items-center gap-2 border border-slate-700/60 text-xs font-medium">
-          <i class="fa-solid fa-server"></i>
-          <span class="hidden sm:inline" id="status-badge-text">Conexão API</span>
-          <span id="status-indicator-dot" class="w-2.5 h-2.5 rounded-full bg-slate-500 animate-pulse"></span>
-        </button>
-        <button onclick="abrirModalPerfil()" class="p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition flex items-center gap-2 border border-emerald-500/30 text-xs font-semibold">
-          <i class="fa-solid fa-user-gear"></i>
-          <span class="hidden sm:inline">Metas & TMB</span>
-        </button>
-      </div>
-    </div>
-  </header>
+# Permite que a calculadora no navegador comunique com a API sem bloqueios de CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-  <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+DB_PATH = "alimentos_cache.db"
 
-    <!-- Navegação por Calendário -->
-    <section class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-      <div class="flex items-center gap-2">
-        <button onclick="alterarDia(-1)" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
-          <i class="fa-solid fa-chevron-left text-xs"></i>
-        </button>
-        <div class="relative">
-          <input type="date" id="input-data" onchange="selecionarData(this.value)" class="bg-slate-800 border border-slate-700 text-slate-200 text-sm font-semibold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
-        </div>
-        <button onclick="alterarDia(1)" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
-          <i class="fa-solid fa-chevron-right text-xs"></i>
-        </button>
-        <button onclick="definirHoje()" class="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 transition">
-          Hoje
-        </button>
-      </div>
+def init_db():
+    """Cria a tabela SQLite local para guardar o cache dos alimentos."""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alimentos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                marca TEXT,
+                calorias REAL DEFAULT 0,
+                proteinas REAL DEFAULT 0,
+                carboidratos REAL DEFAULT 0,
+                gorduras REAL DEFAULT 0,
+                fonte TEXT DEFAULT 'CACHE'
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_nome ON alimentos(nome);")
+        conn.commit()
 
-      <!-- Resumo Rápido de Água -->
-      <div class="flex items-center gap-3 bg-slate-950/60 border border-slate-800 px-4 py-2 rounded-xl">
-        <div class="flex items-center gap-2 text-cyan-400 text-sm font-semibold">
-          <i class="fa-solid fa-droplet animate-bounce"></i>
-          <span id="agua-atual">0</span> / <span id="agua-meta" class="text-slate-400 text-xs">2500</span> ml
-        </div>
-        <div class="flex items-center gap-1">
-          <button onclick="adicionarAgua(250)" class="px-2 py-1 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/50 rounded-lg text-xs font-bold transition">+250ml</button>
-          <button onclick="adicionarAgua(500)" class="px-2 py-1 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/50 rounded-lg text-xs font-bold transition">+500ml</button>
-          <button onclick="resetarAgua()" title="Zerar água" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg text-xs"><i class="fa-solid fa-rotate-left"></i></button>
-        </div>
-      </div>
-    </section>
+init_db()
 
-    <!-- Resumo de Metas e Dashboard -->
-    <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <!-- Card Calorias -->
-      <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 relative overflow-hidden shadow-sm">
-        <div class="flex justify-between items-start mb-2">
-          <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Energia / Calorias</span>
-          <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs"><i class="fa-solid fa-bolt"></i></span>
-        </div>
-        <div class="flex items-baseline gap-1">
-          <span id="total-kcal" class="text-3xl font-extrabold text-white">0</span>
-          <span class="text-xs text-slate-400">/ <span id="meta-kcal">2200</span> kcal</span>
-        </div>
-        <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="progresso-kcal" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full w-0 transition-all duration-500"></div>
-        </div>
-        <p id="saldo-kcal" class="mt-2 text-xs text-slate-400 font-medium">Restam 2200 kcal</p>
-      </div>
+@app.get("/")
+def home():
+    """Rota para verificar se a API está online."""
+    return {"status": "ok", "mensagem": "MacroFit API está online e pronta!"}
 
-      <!-- Card Proteína -->
-      <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
-        <div class="flex justify-between items-start mb-2">
-          <span class="text-xs uppercase font-bold tracking-wider text-rose-400">Proteínas</span>
-          <span class="p-2 rounded-lg bg-rose-500/10 text-rose-400 text-xs"><i class="fa-solid fa-drumstick-bite"></i></span>
-        </div>
-        <div class="flex items-baseline gap-1">
-          <span id="total-prot" class="text-2xl font-bold text-white">0.0</span>
-          <span class="text-xs text-slate-400">/ <span id="meta-prot">160</span>g</span>
-        </div>
-        <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="progresso-prot" class="bg-rose-500 h-full w-0 transition-all duration-500"></div>
-        </div>
-      </div>
+@app.get("/api/alimentos")
+async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome do alimento")):
+    termo = q.strip().lower()
+    resultados = []
 
-      <!-- Card Carboidrato -->
-      <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
-        <div class="flex justify-between items-start mb-2">
-          <span class="text-xs uppercase font-bold tracking-wider text-amber-400">Carboidratos</span>
-          <span class="p-2 rounded-lg bg-amber-500/10 text-amber-400 text-xs"><i class="fa-solid fa-wheat-awn"></i></span>
-        </div>
-        <div class="flex items-baseline gap-1">
-          <span id="total-carb" class="text-2xl font-bold text-white">0.0</span>
-          <span class="text-xs text-slate-400">/ <span id="meta-carb">250</span>g</span>
-        </div>
-        <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="progresso-carb" class="bg-amber-500 h-full w-0 transition-all duration-500"></div>
-        </div>
-      </div>
+    # 1. Procura primeiro no cache local SQLite
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT nome, marca, calorias, proteinas, carboidratos, gorduras, fonte 
+            FROM alimentos 
+            WHERE LOWER(nome) LIKE ? 
+            LIMIT 15
+        """, (f"%{termo}%",))
+        rows = cursor.fetchall()
+        for r in rows:
+            resultados.append(dict(r))
 
-      <!-- Card Gordura -->
-      <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
-        <div class="flex justify-between items-start mb-2">
-          <span class="text-xs uppercase font-bold tracking-wider text-sky-400">Gorduras</span>
-          <span class="p-2 rounded-lg bg-sky-500/10 text-sky-400 text-xs"><i class="fa-solid fa-droplet"></i></span>
-        </div>
-        <div class="flex items-baseline gap-1">
-          <span id="total-fat" class="text-2xl font-bold text-white">0.0</span>
-          <span class="text-xs text-slate-400">/ <span id="meta-fat">60</span>g</span>
-        </div>
-        <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="progresso-fat" class="bg-sky-500 h-full w-0 transition-all duration-500"></div>
-        </div>
-      </div>
-    </section>
+    # Se já encontrou pelo menos 3 itens locais, devolve logo
+    if len(resultados) >= 3:
+        return {"origem": "local_cache", "total": len(resultados), "itens": resultados}
 
-    <!-- Cabeçalho das Refeições & Botão de Nova Categoria -->
-    <div class="flex items-center justify-between pt-2">
-      <h2 class="text-base font-bold text-slate-200 flex items-center gap-2">
-        <i class="fa-solid fa-utensils text-emerald-400"></i> Diário de Refeições
-      </h2>
-      <button onclick="abrirModalNovaCategoria()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1.5">
-        <i class="fa-solid fa-plus text-xs"></i> Adicionar Categoria
-      </button>
-    </div>
-
-    <!-- Container Dinâmico de Categorias de Refeição -->
-    <div id="container-refeicoes" class="space-y-4">
-      <!-- Injetado via Javascript -->
-    </div>
-
-  </main>
-
-  <!-- MODAL: Configurar URL do Backend / Proxy -->
-  <div id="modal-config" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative">
-      <div class="flex justify-between items-center mb-4">
-        <div class="flex items-center gap-2 text-emerald-400 font-bold">
-          <i class="fa-solid fa-network-wired"></i>
-          <h3>Configuração da Fonte de Dados</h3>
-        </div>
-        <button onclick="fecharModalConfig()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <div class="space-y-4 text-xs text-slate-300">
-        <p class="leading-relaxed">
-          Defina como o app buscará alimentos. Se o servidor estiver ativo (seja no celular via <strong class="text-slate-100">Termux</strong> ou na <strong class="text-slate-100">nuvem</strong>), ele terá acesso a milhares de produtos com cache rápido. Caso o servidor não responda, a calculadora usa a base <strong class="text-emerald-400">TACO Offline</strong> instantaneamente.
-        </p>
-
-        <div>
-          <label class="block text-slate-400 font-medium mb-1">URL Base do Servidor API:</label>
-          <div class="flex gap-2">
-            <input type="text" id="cfg-backend-url" placeholder="http://localhost:8000" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
-            <button onclick="testarConexaoBackend()" id="btn-testar-conexao" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-semibold transition border border-slate-700 flex items-center gap-2">
-              <i class="fa-solid fa-plug"></i> Testar
-            </button>
-          </div>
-          <span id="teste-resultado" class="text-[11px] block mt-1.5 font-medium text-slate-400">Aguardando teste...</span>
-        </div>
-
-        <!-- Atalhos Prontos -->
-        <div>
-          <span class="block text-slate-400 mb-1.5 font-medium">Predefinições rápidas:</span>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="definirPresetUrl('http://localhost:8000')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
-              <i class="fa-brands fa-android text-emerald-400 mr-1"></i> Termux / Local (8000)
-            </button>
-            <button onclick="definirPresetUrl('http://127.0.0.1:8000')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
-              127.0.0.1:8000
-            </button>
-            <button onclick="definirPresetUrl('')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
-              Desativar (Apenas TACO)
-            </button>
-          </div>
-        </div>
-
-        <div class="pt-4 border-t border-slate-800 flex justify-end gap-2">
-          <button onclick="fecharModalConfig()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold">Cancelar</button>
-          <button onclick="salvarConfiguracaoBackend()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold transition">Salvar Configuração</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: Adicionar Alimento / Busca Híbrida -->
-  <div id="modal-alimento" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
-      <div class="flex justify-between items-center mb-3">
-        <div>
-          <h3 class="font-bold text-slate-100 flex items-center gap-2">
-            <i class="fa-solid fa-magnifying-glass text-emerald-400"></i> Buscar & Adicionar Alimento
-          </h3>
-          <p class="text-xs text-slate-400">Adicionando em: <span id="label-refeicao-alvo" class="text-emerald-400 font-semibold"></span></p>
-        </div>
-        <button onclick="fecharModalAlimento()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <!-- Barra de Pesquisa -->
-      <div class="relative mb-3">
-        <input type="text" id="busca-alimento-input" oninput="dispararBuscaComDebounce(this.value)" placeholder="Digite o produto (ex: Nescau, Frango, Banana, Whey)..." class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-9 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
-        <i class="fa-solid fa-search absolute left-3 top-3.5 text-slate-500 text-xs"></i>
-        <span id="busca-spinner" class="absolute right-3 top-3 hidden"><i class="fa-solid fa-circle-notch fa-spin text-emerald-400 text-sm"></i></span>
-      </div>
-
-      <!-- Origem da Busca / Badge -->
-      <div class="flex items-center justify-between text-[11px] text-slate-400 px-1 mb-2">
-        <span id="info-origem-busca">Digite ao menos 2 letras para pesquisar</span>
-        <span id="tag-origem-status" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 font-medium">Auto Fallback</span>
-      </div>
-
-      <!-- Lista de Resultados de Busca -->
-      <div id="lista-resultados" class="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar max-h-48 border border-slate-800 rounded-xl p-2 bg-slate-950/40 mb-3">
-        <div class="text-center py-6 text-slate-500 text-xs">Nenhum alimento selecionado.</div>
-      </div>
-
-      <!-- Painel do Alimento Selecionado & Conversor de Medidas -->
-      <div id="painel-calculo-porcao" class="border-t border-slate-800 pt-3 space-y-3 hidden">
-        <div class="bg-slate-800/40 border border-slate-700/60 rounded-xl p-3">
-          <div class="flex justify-between items-start">
-            <div>
-              <p id="sel-nome-alimento" class="text-sm font-bold text-white"></p>
-              <p id="sel-marca-alimento" class="text-[11px] text-slate-400"></p>
-            </div>
-            <span id="sel-badge-fonte" class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300"></span>
-          </div>
-
-          <!-- Controle de Quantidade e Unidade -->
-          <div class="grid grid-cols-2 gap-2 mt-3">
-            <div>
-              <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Quantidade</label>
-              <input type="number" id="sel-qtd-input" value="100" min="1" step="any" oninput="recalcularPreviewPorcao()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white font-semibold outline-none focus:ring-1 focus:ring-emerald-500">
-            </div>
-            <div>
-              <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Unidade / Medida</label>
-              <select id="sel-unidade-select" onchange="recalcularPreviewPorcao()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-medium outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="1">Gramas (g)</option>
-                <option value="1">Mililitros (ml)</option>
-                <option value="15">Colher de sopa (~15g)</option>
-                <option value="5">Colher de chá (~5g)</option>
-                <option value="50">Unidade média (~50g)</option>
-                <option value="100">Porção de 100g</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Live Preview dos Macros Calculados -->
-          <div class="grid grid-cols-4 gap-1.5 mt-3 text-center bg-slate-950/70 p-2 rounded-lg border border-slate-800 text-xs">
-            <div>
-              <span class="block text-[10px] text-slate-400 font-medium">Calorias</span>
-              <span id="prev-kcal" class="font-extrabold text-emerald-400">0</span> <span class="text-[9px] text-slate-500">kcal</span>
-            </div>
-            <div>
-              <span class="block text-[10px] text-slate-400 font-medium">Proteína</span>
-              <span id="prev-prot" class="font-bold text-rose-400">0</span> <span class="text-[9px] text-slate-500">g</span>
-            </div>
-            <div>
-              <span class="block text-[10px] text-slate-400 font-medium">Carboidrato</span>
-              <span id="prev-carb" class="font-bold text-amber-400">0</span> <span class="text-[9px] text-slate-500">g</span>
-            </div>
-            <div>
-              <span class="block text-[10px] text-slate-400 font-medium">Gordura</span>
-              <span id="prev-fat" class="font-bold text-sky-400">0</span> <span class="text-[9px] text-slate-500">g</span>
-            </div>
-          </div>
-        </div>
-
-        <button onclick="confirmarAdicaoAlimento()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-plus"></i> Registrar na Refeição
-        </button>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- MODAL: Nova Categoria Customizada -->
-  <div id="modal-categoria" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl relative">
-      <h3 class="font-bold text-slate-100 text-sm mb-3 flex items-center gap-2">
-        <i class="fa-solid fa-folder-plus text-emerald-400"></i> Nova Categoria de Refeição
-      </h3>
-      <input type="text" id="novo-nome-categoria" placeholder="Ex: Pré-Treino, Ceia, Lanche da Noite..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 mb-4">
-      <div class="flex justify-end gap-2 text-xs">
-        <button onclick="fecharModalNovaCategoria()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300">Cancelar</button>
-        <button onclick="salvarNovaCategoria()" class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold">Criar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: Perfil & Metas Metabólicas -->
-  <div id="modal-perfil" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="font-bold text-slate-100 text-sm flex items-center gap-2">
-          <i class="fa-solid fa-calculator text-emerald-400"></i> Metas Metabólicas (Mifflin-St Jeor)
-        </h3>
-        <button onclick="fecharModalPerfil()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <div class="space-y-3 text-xs">
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="text-slate-400 block mb-1">Gênero</label>
-            <select id="prof-genero" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100">
-              <option value="m">Masculino</option>
-              <option value="f">Feminino</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-slate-400 block mb-1">Idade (anos)</label>
-            <input type="number" id="prof-idade" value="30" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100">
-          </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="text-slate-400 block mb-1">Peso (kg)</label>
-            <input type="number" id="prof-peso" step="0.1" value="78" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100">
-          </div>
-          <div>
-            <label class="text-slate-400 block mb-1">Altura (cm)</label>
-            <input type="number" id="prof-altura" value="175" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100">
-          </div>
-        </div>
-
-        <div>
-          <label class="text-slate-400 block mb-1">Nível de Atividade</label>
-          <select id="prof-atividade" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100">
-            <option value="1.2">Sedentário (pouco ou nenhum exercício)</option>
-            <option value="1.375">Leve (exercício 1 a 3 dias/semana)</option>
-            <option value="1.55" selected>Moderado (exercício 3 a 5 dias/semana)</option>
-            <option value="1.725">Pesado (exercício 6 a 7 dias/semana)</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="text-slate-400 block mb-1">Objetivo</label>
-          <select id="prof-objetivo" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100">
-            <option value="-400">Emagrecimento / Cutting (-400 kcal)</option>
-            <option value="0" selected>Manutenção de Peso</option>
-            <option value="350">Ganho de Massa / Bulking (+350 kcal)</option>
-          </select>
-        </div>
-
-        <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
-          <button onclick="fecharModalPerfil()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold">Cancelar</button>
-          <button onclick="salvarPerfilMetabolico()" class="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl">Recalcular Metas</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    /* ==========================================================================
-       1. BASE TACO OFFLINE COMPLETA DE CONTINGÊNCIA (FALLBACK)
-       ========================================================================== */
-    const BASE_TACO_OFFLINE = [
-      { nome: "Nescau em Pó", marca: "Nestlé", calorias: 380, proteinas: 3.5, carboidratos: 85.0, gorduras: 2.8, fonte: "TACO/Popular" },
-      { nome: "Peito de Frango Grelhado", marca: "Preparo Típico", calorias: 159, proteinas: 32.0, carboidratos: 0.0, gorduras: 2.5, fonte: "TACO" },
-      { nome: "Arroz Branco Cozido", marca: "Preparo Típico", calorias: 128, proteinas: 2.5, carboidratos: 28.1, gorduras: 0.2, fonte: "TACO" },
-      { nome: "Feijão Carioca Cozido", marca: "Preparo Típico", calorias: 76, proteinas: 4.8, carboidratos: 13.6, gorduras: 0.5, fonte: "TACO" },
-      { nome: "Ovo de Galinha Inteiro Cozido", marca: "Preparo Típico", calorias: 146, proteinas: 13.3, carboidratos: 0.6, gorduras: 9.5, fonte: "TACO" },
-      { nome: "Clara de Ovo Cozida", marca: "Preparo Típico", calorias: 52, proteinas: 11.0, carboidratos: 0.7, gorduras: 0.2, fonte: "TACO" },
-      { nome: "Banana Prata Crua", marca: "Frutas", calorias: 98, proteinas: 1.3, carboidratos: 26.0, gorduras: 0.1, fonte: "TACO" },
-      { nome: "Maçã Fuji com Casca", marca: "Frutas", calorias: 56, proteinas: 0.3, carboidratos: 15.2, gorduras: 0.2, fonte: "TACO" },
-      { nome: "Aveia em Flocos", marca: "Quaker / Genérico", calorias: 394, proteinas: 13.9, carboidratos: 66.6, gorduras: 8.5, fonte: "TACO" },
-      { nome: "Whey Protein Concentrado 80%", marca: "Genérico", calorias: 400, proteinas: 80.0, carboidratos: 6.0, gorduras: 6.0, fonte: "Referência" },
-      { nome: "Carne Bovina Patinho Grelhado", marca: "Preparo Típico", calorias: 219, proteinas: 35.9, carboidratos: 0.0, gorduras: 7.3, fonte: "TACO" },
-      { nome: "Leite Desnatado", marca: "Genérico", calorias: 35, proteinas: 3.4, carboidratos: 4.9, gorduras: 0.1, fonte: "TACO" },
-      { nome: "Leite Integral", marca: "Genérico", calorias: 60, proteinas: 3.1, carboidratos: 4.6, gorduras: 3.2, fonte: "TACO" },
-      { nome: "Azeite de Oliva Extra Virgem", marca: "Genérico", calorias: 884, proteinas: 0.0, carboidratos: 0.0, gorduras: 100.0, fonte: "TACO" },
-      { nome: "Pasta de Amendoim Integral", marca: "Genérico", calorias: 588, proteinas: 25.0, carboidratos: 20.0, gorduras: 50.0, fonte: "TACO" },
-      { nome: "Pão de Forma Tradicional", marca: "Genérico", calorias: 265, proteinas: 8.0, carboidratos: 50.0, gorduras: 3.2, fonte: "TACO" },
-      { nome: "Tapioca Goma Hidratada", marca: "Genérico", calorias: 240, proteinas: 0.1, carboidratos: 60.0, gorduras: 0.0, fonte: "TACO" },
-      { nome: "Batata Doce Cozida", marca: "Preparo Típico", calorias: 77, proteinas: 0.6, carboidratos: 18.4, gorduras: 0.1, fonte: "TACO" }
-    ];
-
-    /* ==========================================================================
-       2. ESTADO GLOBAL DA APLICAÇÃO
-       ========================================================================== */
-    let dataAtual = new Date().toISOString().split('T')[0];
-    let debounceTimer = null;
-    let categoriaAlvo = null;
-    let itemSelecionadoTemp = null;
-
-    // Configurações do Backend / Proxy
-    let configApp = {
-      backendUrl: localStorage.getItem('macrofit_backend_url') || 'http://localhost:8000',
-      ultimoStatusApi: 'offline' // 'online' ou 'offline'
-    };
-
-    // Metas Padrão
-    let metas = JSON.parse(localStorage.getItem('macrofit_metas')) || {
-      kcal: 2200,
-      prot: 160,
-      carb: 250,
-      fat: 60,
-      agua: 2500
-    };
-
-    // Categorias Padrão
-    let categorias = JSON.parse(localStorage.getItem('macrofit_categorias')) || [
-      "Café da Manhã",
-      "Almoço",
-      "Lanche da Tarde",
-      "Jantar"
-    ];
-
-    /* ==========================================================================
-       3. INICIALIZAÇÃO
-       ========================================================================== */
-    window.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('input-data').value = dataAtual;
-      document.getElementById('cfg-backend-url').value = configApp.backendUrl;
-      atualizarMetasNaInterface();
-      renderizarEstruturaRefeicoes();
-      carregarDia();
-      testarConexaoBackend(false); // checagem silenciosa na inicialização
-    });
-
-    /* ==========================================================================
-       4. CONEXÃO COM O BACKEND & TESTE DE STATUS
-       ========================================================================== */
-    async function testarConexaoBackend(feedbackVisual = true) {
-      const urlInput = document.getElementById('cfg-backend-url').value.trim().replace(/\/+$/, '');
-      const resultadoSpan = document.getElementById('teste-resultado');
-      const dot = document.getElementById('status-indicator-dot');
-      const badgeText = document.getElementById('status-badge-text');
-
-      if (!urlInput) {
-        configApp.ultimoStatusApi = 'offline';
-        dot.className = "w-2.5 h-2.5 rounded-full bg-slate-500";
-        badgeText.textContent = "TACO Offline";
-        if (feedbackVisual) resultadoSpan.innerHTML = "<span class='text-amber-400'>Modo offline ativado (usando TACO local).</span>";
-        return;
-      }
-
-      if (feedbackVisual) resultadoSpan.innerHTML = "<span class='text-cyan-400'><i class='fa-solid fa-spinner fa-spin'></i> Testando conexão...</span>";
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout
-
-        const resp = await fetch(`${urlInput}/api/alimentos?q=teste`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (resp.ok) {
-          configApp.ultimoStatusApi = 'online';
-          dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400";
-          badgeText.textContent = "API Conectada";
-          if (feedbackVisual) resultadoSpan.innerHTML = "<span class='text-emerald-400 font-semibold'><i class='fa-solid fa-check'></i> Conectado com sucesso! Cache e API ativos.</span>";
-        } else {
-          throw new Error('Servidor respondeu com código de erro');
-        }
-      } catch (err) {
-        configApp.ultimoStatusApi = 'offline';
-        dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500";
-        badgeText.textContent = "Fallback TACO";
-        if (feedbackVisual) resultadoSpan.innerHTML = "<span class='text-rose-400 font-semibold'><i class='fa-solid fa-triangle-exclamation'></i> Servidor inacessível. O app continuará com a base TACO.</span>";
-      }
+    # 2. Se não encontrou o suficiente, pesquisa na API externa enviando o User-Agent oficial
+    headers = {
+        "User-Agent": "MacroFitPro/1.0 (suporte@macrofit.local)"
     }
+    url = (
+        f"https://br.openfoodfacts.org/cgi/search.pl"
+        f"?search_terms={termo}&search_simple=1&action=process&json=1&page_size=12"
+        f"&fields=product_name,brands,nutriments"
+    )
 
-    function salvarConfiguracaoBackend() {
-      const novaUrl = document.getElementById('cfg-backend-url').value.trim().replace(/\/+$/, '');
-      configApp.backendUrl = novaUrl;
-      localStorage.setItem('macrofit_backend_url', novaUrl);
-      testarConexaoBackend(false);
-      fecharModalConfig();
-    }
+    novos_itens = []
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                produtos = data.get("products", [])
 
-    function definirPresetUrl(url) {
-      document.getElementById('cfg-backend-url').value = url;
-    }
+                with sqlite3.connect(DB_PATH) as conn:
+                    cursor = conn.cursor()
+                    for p in produtos:
+                        nome = p.get("product_name")
+                        if not nome:
+                            continue
 
-    /* ==========================================================================
-       5. SISTEMA DE BUSCA HÍBRIDO COM FALLBACK AUTOMÁTICO
-       ========================================================================== */
-    function dispararBuscaComDebounce(termo) {
-      clearTimeout(debounceTimer);
-      const spinner = document.getElementById('busca-spinner');
-      
-      if (termo.trim().length < 2) {
-        document.getElementById('lista-resultados').innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Digite ao menos 2 caracteres...</div>`;
-        document.getElementById('painel-calculo-porcao').classList.add('hidden');
-        return;
-      }
+                        marca = p.get("brands", "Genérico") or "Genérico"
+                        nutri = p.get("nutriments", {})
 
-      spinner.classList.remove('hidden');
-      debounceTimer = setTimeout(() => {
-        executarBuscaAlimentos(termo.trim());
-      }, 350); // debounce de 350ms
-    }
+                        # Extrai energia e macronutrientes por 100g/100ml
+                        kcal = float(nutri.get("energy-kcal_100g") or nutri.get("energy-kcal") or 0)
+                        prot = float(nutri.get("proteins_100g") or 0)
+                        carb = float(nutri.get("carbohydrates_100g") or 0)
+                        fat = float(nutri.get("fat_100g") or 0)
 
-    async function executarBuscaAlimentos(termo) {
-      const spinner = document.getElementById('busca-spinner');
-      const tagStatus = document.getElementById('tag-origem-status');
-      const infoOrigem = document.getElementById('info-origem-busca');
-      let itensRetornados = [];
-      let fonteUsada = "";
+                        cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = ?", (nome.lower(),))
+                        if not cursor.fetchone():
+                            cursor.execute("""
+                                INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
+                                VALUES (?, ?, ?, ?, ?, ?, 'OPEN_FOOD_FACTS')
+                            """, (nome, marca, kcal, prot, carb, fat))
+                            conn.commit()
 
-      // 1. Tenta buscar no Backend configurado se houver URL definida
-      if (configApp.backendUrl) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
+                        novos_itens.append({
+                            "nome": nome,
+                            "marca": marca,
+                            "calorias": kcal,
+                            "proteinas": prot,
+                            "carboidratos": carb,
+                            "gorduras": fat,
+                            "fonte": "OPEN_FOOD_FACTS"
+                        })
+    except Exception as e:
+        print(f"Erro ao consultar API externa: {e}")
 
-          const url = `${configApp.backendUrl}/api/alimentos?q=${encodeURIComponent(termo)}`;
-          const response = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data.itens && data.itens.length > 0) {
-              itensRetornados = data.itens;
-              fonteUsada = data.origem === 'local_cache' ? 'Servidor (Cache SQLite)' : 'Servidor (Híbrido/OFF)';
-              tagStatus.className = "px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold";
-              tagStatus.textContent = "Servidor Online";
-            }
-          }
-        } catch (e) {
-          console.warn("Backend offline ou falhou, ativando fallback TACO...", e);
-        }
-      }
-
-      // 2. Se o backend falhou ou retornou vazio, ativa Fallback na Base TACO
-      if (itensRetornados.length === 0) {
-        fonteUsada = "TACO Offline (Local)";
-        const tLower = termo.toLowerCase();
-        itensRetornados = BASE_TACO_OFFLINE.filter(item => 
-          item.nome.toLowerCase().includes(tLower) || 
-          item.marca.toLowerCase().includes(tLower)
-        );
-        tagStatus.className = "px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-semibold";
-        tagStatus.textContent = "Fallback TACO";
-      }
-
-      spinner.classList.add('hidden');
-      infoOrigem.textContent = `${itensRetornados.length} itens encontrados via ${fonteUsada}`;
-      renderizarResultadosBusca(itensRetornados);
-    }
-
-    function renderizarResultadosBusca(lista) {
-      const container = document.getElementById('lista-resultados');
-      if (lista.length === 0) {
-        container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Nenhum resultado encontrado para o termo.</div>`;
-        return;
-      }
-
-      container.innerHTML = lista.map((item, idx) => `
-        <div onclick='selecionarItemBusca(${JSON.stringify(item)})' class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition flex items-center justify-between group">
-          <div>
-            <h4 class="text-xs font-bold text-slate-200 group-hover:text-emerald-400 transition">${item.nome}</h4>
-            <span class="text-[10px] text-slate-400">${item.marca || 'Genérico'} • ${item.calorias} kcal / 100g</span>
-          </div>
-          <div class="text-right text-[10px] text-slate-400">
-            <span class="text-rose-400 font-semibold">${item.proteinas}g P</span> |
-            <span class="text-amber-400 font-semibold">${item.carboidratos}g C</span> |
-            <span class="text-sky-400 font-semibold">${item.gorduras}g G</span>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function selecionarItemBusca(item) {
-      itemSelecionadoTemp = item;
-      document.getElementById('painel-calculo-porcao').classList.remove('hidden');
-      document.getElementById('sel-nome-alimento').textContent = item.nome;
-      document.getElementById('sel-marca-alimento').textContent = item.marca || 'Genérico';
-      document.getElementById('sel-badge-fonte').textContent = item.fonte || 'Nutrição';
-      document.getElementById('sel-qtd-input').value = 100;
-      document.getElementById('sel-unidade-select').value = "1";
-      recalcularPreviewPorcao();
-    }
-
-    function recalcularPreviewPorcao() {
-      if (!itemSelecionadoTemp) return;
-      const qtd = parseFloat(document.getElementById('sel-qtd-input').value) || 0;
-      const multiplicadorUnidade = parseFloat(document.getElementById('sel-unidade-select').value) || 1;
-      const pesoFinalGramas = qtd * (multiplicadorUnidade === 1 ? 1 : multiplicadorUnidade / 100);
-      const fator = (multiplicadorUnidade === 1 ? qtd : (qtd * multiplicadorUnidade)) / 100;
-
-      const kcal = (itemSelecionadoTemp.calorias * fator).toFixed(0);
-      const prot = (itemSelecionadoTemp.proteinas * fator).toFixed(1);
-      const carb = (itemSelecionadoTemp.carboidratos * fator).toFixed(1);
-      const fat = (itemSelecionadoTemp.gorduras * fator).toFixed(1);
-
-      document.getElementById('prev-kcal').textContent = kcal;
-      document.getElementById('prev-prot').textContent = prot;
-      document.getElementById('prev-carb').textContent = carb;
-      document.getElementById('prev-fat').textContent = fat;
-    }
-
-    function confirmarAdicaoAlimento() {
-      if (!itemSelecionadoTemp || !categoriaAlvo) return;
-      const qtd = parseFloat(document.getElementById('sel-qtd-input').value) || 100;
-      const multiplicadorUnidade = parseFloat(document.getElementById('sel-unidade-select').value) || 1;
-      const fator = (multiplicadorUnidade === 1 ? qtd : (qtd * multiplicadorUnidade)) / 100;
-
-      const alimentoRegistrado = {
-        id: Date.now(),
-        nome: itemSelecionadoTemp.nome,
-        marca: itemSelecionadoTemp.marca,
-        quantidade: qtd,
-        unidadeDesc: document.getElementById('sel-unidade-select').options[document.getElementById('sel-unidade-select').selectedIndex].text,
-        calorias: parseFloat((itemSelecionadoTemp.calorias * fator).toFixed(1)),
-        proteinas: parseFloat((itemSelecionadoTemp.proteinas * fator).toFixed(1)),
-        carboidratos: parseFloat((itemSelecionadoTemp.carboidratos * fator).toFixed(1)),
-        gorduras: parseFloat((itemSelecionadoTemp.gorduras * fator).toFixed(1))
-      };
-
-      const diario = obterDadosDiario(dataAtual);
-      if (!diario[categoriaAlvo]) diario[categoriaAlvo] = [];
-      diario[categoriaAlvo].push(alimentoRegistrado);
-      salvarDadosDiario(dataAtual, diario);
-
-      fecharModalAlimento();
-      renderizarDiarioAtual();
-    }
-
-    /* ==========================================================================
-       6. GERENCIAMENTO DE CATEGORIAS E REFEIÇÕES
-       ========================================================================== */
-    function renderizarEstruturaRefeicoes() {
-      const container = document.getElementById('container-refeicoes');
-      container.innerHTML = categorias.map(cat => `
-        <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-sm" id="cat-card-${sanitizarId(cat)}">
-          <div class="flex items-center justify-between pb-3 border-b border-slate-800/80">
-            <div class="flex items-center gap-2">
-              <h3 class="font-bold text-sm text-slate-200">${cat}</h3>
-              <span id="subtotal-cat-${sanitizarId(cat)}" class="text-[11px] font-semibold text-emerald-400/90 bg-emerald-500/10 px-2 py-0.5 rounded-md">0 kcal</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <button onclick="abrirModalAlimento('${cat}')" class="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-semibold transition flex items-center gap-1">
-                <i class="fa-solid fa-plus text-[10px]"></i> Adicionar
-              </button>
-              <button onclick="removerCategoria('${cat}')" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition" title="Remover categoria">
-                <i class="fa-regular fa-trash-can"></i>
-              </button>
-            </div>
-          </div>
-          <div id="itens-cat-${sanitizarId(cat)}" class="divide-y divide-slate-800/60 mt-1">
-            <p class="text-xs text-slate-500 py-3 text-center">Nenhum alimento nesta refeição.</p>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function sanitizarId(str) {
-      return str.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    }
-
-    function salvarNovaCategoria() {
-      const input = document.getElementById('novo-nome-categoria');
-      const nome = input.value.trim();
-      if (!nome) return;
-
-      if (!categorias.includes(nome)) {
-        categorias.push(nome);
-        localStorage.setItem('macrofit_categorias', JSON.stringify(categorias));
-        renderizarEstruturaRefeicoes();
-        renderizarDiarioAtual();
-      }
-      input.value = '';
-      fecharModalNovaCategoria();
-    }
-
-    function removerCategoria(nomeCat) {
-      if (!confirm(`Deseja remover a categoria "${nomeCat}" e seus itens cadastrados neste dia?`)) return;
-      categorias = categorias.filter(c => c !== nomeCat);
-      localStorage.setItem('macrofit_categorias', JSON.stringify(categorias));
-
-      const diario = obterDadosDiario(dataAtual);
-      delete diario[nomeCat];
-      salvarDadosDiario(dataAtual, diario);
-
-      renderizarEstruturaRefeicoes();
-      renderizarDiarioAtual();
-    }
-
-    function removerItemRefeicao(cat, idItem) {
-      const diario = obterDadosDiario(dataAtual);
-      if (diario[cat]) {
-        diario[cat] = diario[cat].filter(i => i.id !== idItem);
-        salvarDadosDiario(dataAtual, diario);
-        renderizarDiarioAtual();
-      }
-    }
-
-    /* ==========================================================================
-       7. CÁLCULO DE TOTAIS E RENDERIZAÇÃO DO DIÁRIO
-       ========================================================================== */
-    function obterDadosDiario(data) {
-      return JSON.parse(localStorage.getItem(`macrofit_diario_${data}`)) || {};
-    }
-
-    function salvarDadosDiario(data, dados) {
-      localStorage.setItem(`macrofit_diario_${data}`, JSON.stringify(dados));
-    }
-
-    function renderizarDiarioAtual() {
-      const diario = obterDadosDiario(dataAtual);
-      let totalKcal = 0, totalProt = 0, totalCarb = 0, totalFat = 0;
-
-      categorias.forEach(cat => {
-        const itens = diario[cat] || [];
-        const containerItens = document.getElementById(`itens-cat-${sanitizarId(cat)}`);
-        const subtotalBadge = document.getElementById(`subtotal-cat-${sanitizarId(cat)}`);
-
-        if (!containerItens) return;
-
-        let subKcal = 0;
-        if (itens.length === 0) {
-          containerItens.innerHTML = `<p class="text-xs text-slate-500 py-3 text-center">Nenhum alimento nesta refeição.</p>`;
-        } else {
-          containerItens.innerHTML = itens.map(item => {
-            subKcal += item.calorias;
-            totalKcal += item.calorias;
-            totalProt += item.proteinas;
-            totalCarb += item.carboidratos;
-            totalFat += item.gorduras;
-
-            return `
-              <div class="py-2.5 flex items-center justify-between text-xs">
-                <div class="flex-1">
-                  <p class="font-semibold text-slate-200">${item.nome}</p>
-                  <p class="text-[10px] text-slate-400">${item.quantidade} (${item.unidadeDesc})</p>
-                </div>
-                <div class="flex items-center gap-4">
-                  <div class="text-right">
-                    <span class="font-bold text-white">${Math.round(item.calorias)} kcal</span>
-                    <p class="text-[10px] text-slate-400">P: ${item.proteinas}g | C: ${item.carboidratos}g | G: ${item.gorduras}g</p>
-                  </div>
-                  <button onclick="removerItemRefeicao('${cat}', ${item.id})" class="text-slate-600 hover:text-rose-400 transition p-1">
-                    <i class="fa-solid fa-xmark text-xs"></i>
-                  </button>
-                </div>
-              </div>
-            `;
-          }).join('');
-        }
-
-        if (subtotalBadge) subtotalBadge.textContent = `${Math.round(subKcal)} kcal`;
-      });
-
-      // Atualiza Totais nos Cards
-      document.getElementById('total-kcal').textContent = Math.round(totalKcal);
-      document.getElementById('total-prot').textContent = totalProt.toFixed(1);
-      document.getElementById('total-carb').textContent = totalCarb.toFixed(1);
-      document.getElementById('total-fat').textContent = totalFat.toFixed(1);
-
-      // Barras de Progresso
-      const pctKcal = Math.min(100, (totalKcal / metas.kcal) * 100);
-      const pctProt = Math.min(100, (totalProt / metas.prot) * 100);
-      const pctCarb = Math.min(100, (totalCarb / metas.carb) * 100);
-      const pctFat = Math.min(100, (totalFat / metas.fat) * 100);
-
-      document.getElementById('progresso-kcal').style.width = `${pctKcal}%`;
-      document.getElementById('progresso-prot').style.width = `${pctProt}%`;
-      document.getElementById('progresso-carb').style.width = `${pctCarb}%`;
-      document.getElementById('progresso-fat').style.width = `${pctFat}%`;
-
-      const saldo = metas.kcal - totalKcal;
-      const saldoEl = document.getElementById('saldo-kcal');
-      if (saldo >= 0) {
-        saldoEl.textContent = `Restam ${Math.round(saldo)} kcal`;
-        saldoEl.className = "mt-2 text-xs text-slate-400 font-medium";
-      } else {
-        saldoEl.textContent = `Excedeu ${Math.abs(Math.round(saldo))} kcal`;
-        saldoEl.className = "mt-2 text-xs text-rose-400 font-bold";
-      }
-
-      // Água do Dia
-      const aguaConsumida = parseFloat(localStorage.getItem(`macrofit_agua_${dataAtual}`)) || 0;
-      document.getElementById('agua-atual').textContent = aguaConsumida;
-    }
-
-    /* ==========================================================================
-       8. CONTROLE DE DATA & ÁGUA
-       ========================================================================= */
-    function alterarDia(delta) {
-      const dt = new Date(dataAtual + "T00:00:00");
-      dt.setDate(dt.getDate() + delta);
-      dataAtual = dt.toISOString().split('T')[0];
-      document.getElementById('input-data').value = dataAtual;
-      carregarDia();
-    }
-
-    function definirHoje() {
-      dataAtual = new Date().toISOString().split('T')[0];
-      document.getElementById('input-data').value = dataAtual;
-      carregarDia();
-    }
-
-    function selecionarData(val) {
-      if (!val) return;
-      dataAtual = val;
-      carregarDia();
-    }
-
-    function carregarDia() {
-      renderizarEstruturaRefeicoes();
-      renderizarDiarioAtual();
-    }
-
-    function adicionarAgua(qtd) {
-      let atual = parseFloat(localStorage.getItem(`macrofit_agua_${dataAtual}`)) || 0;
-      atual += qtd;
-      localStorage.setItem(`macrofit_agua_${dataAtual}`, atual);
-      document.getElementById('agua-atual').textContent = atual;
-    }
-
-    function resetarAgua() {
-      localStorage.setItem(`macrofit_agua_${dataAtual}`, 0);
-      document.getElementById('agua-atual').textContent = 0;
-    }
-
-    /* ==========================================================================
-       9. PERFIL & CÁLCULOS METABÓLICOS (MIFFLIN-ST JEOR)
-       ========================================================================== */
-    function salvarPerfilMetabolico() {
-      const gen = document.getElementById('prof-genero').value;
-      const idade = parseFloat(document.getElementById('prof-idade').value) || 30;
-      const peso = parseFloat(document.getElementById('prof-peso').value) || 75;
-      const altura = parseFloat(document.getElementById('prof-altura').value) || 175;
-      const fatorAtiv = parseFloat(document.getElementById('prof-atividade').value) || 1.55;
-      const ajusteObjetivo = parseFloat(document.getElementById('prof-objetivo').value) || 0;
-
-      // Equação Mifflin-St Jeor
-      let tmb = (10 * peso) + (6.25 * altura) - (5 * idade);
-      tmb += (gen === 'm' ? 5 : -161);
-
-      const get = tmb * fatorAtiv;
-      const caloriasFinais = Math.round(get + ajusteObjetivo);
-
-      // Distribuição clássica: Proteína 2g/kg, Gordura 0.8g/kg, Restante em Carboidratos
-      const prot = Math.round(peso * 2.0);
-      const fat = Math.round(peso * 0.8);
-      const caloriasRestantes = caloriasFinais - (prot * 4) - (fat * 9);
-      const carb = Math.max(50, Math.round(caloriasRestantes / 4));
-      const metaAgua = Math.round(peso * 35);
-
-      metas = { kcal: caloriasFinais, prot, carb, fat, agua: metaAgua };
-      localStorage.setItem('macrofit_metas', JSON.stringify(metas));
-
-      atualizarMetasNaInterface();
-      renderizarDiarioAtual();
-      fecharModalPerfil();
-    }
-
-    function atualizarMetasNaInterface() {
-      document.getElementById('meta-kcal').textContent = metas.kcal;
-      document.getElementById('meta-prot').textContent = metas.prot;
-      document.getElementById('meta-carb').textContent = metas.carb;
-      document.getElementById('meta-fat').textContent = metas.fat;
-      document.getElementById('agua-meta').textContent = metas.agua;
-    }
-
-    /* ==========================================================================
-       10. CONTROLADORES DOS MODAIS
-       ========================================================================== */
-    function abrirModalConfig() { document.getElementById('modal-config').classList.remove('hidden'); }
-    function fecharModalConfig() { document.getElementById('modal-config').classList.add('hidden'); }
-
-    function abrirModalPerfil() { document.getElementById('modal-perfil').classList.remove('hidden'); }
-    function fecharModalPerfil() { document.getElementById('modal-perfil').classList.add('hidden'); }
-
-    function abrirModalNovaCategoria() { document.getElementById('modal-categoria').classList.remove('hidden'); }
-    function fecharModalNovaCategoria() { document.getElementById('modal-categoria').classList.add('hidden'); }
-
-    function abrirModalAlimento(cat) {
-      categoriaAlvo = cat;
-      itemSelecionadoTemp = null;
-      document.getElementById('label-refeicao-alvo').textContent = cat;
-      document.getElementById('busca-alimento-input').value = '';
-      document.getElementById('lista-resultados').innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Digite o nome do produto acima...</div>`;
-      document.getElementById('painel-calculo-porcao').classList.add('hidden');
-      document.getElementById('modal-alimento').classList.remove('hidden');
-      setTimeout(() => document.getElementById('busca-alimento-input').focus(), 150);
-    }
-    function fecharModalAlimento() { document.getElementById('modal-alimento').classList.add('hidden'); }
-  </script>
-</body>
-</html>
+    todos = resultados + novos_itens
+    return {"origem": "hibrido", "total": len(todos), "itens": todos}
