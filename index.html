@@ -14,213 +14,245 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen pb-16 antialiased selection:bg-emerald-500 selection:text-white">
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-emerald-500 selection:text-white">
 
-  <!-- Cabeçalho & Barra Superior -->
-  <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-          <i class="fa-solid fa-fire text-slate-950 text-xl font-bold"></i>
+  <!-- ======================================================================
+       TELA INICIAL: PORTAL DE ACESSO (LOGIN / CADASTRO / RECUPERAÇÃO)
+       ====================================================================== -->
+  <div id="tela-login-portal" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl relative">
+      
+      <!-- Marca & Boas-vindas -->
+      <div class="text-center mb-6">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-xl shadow-emerald-500/20 mx-auto mb-3">
+          <i class="fa-solid fa-fire text-slate-950 text-2xl font-black"></i>
         </div>
+        <h1 class="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">MacroFit Pro</h1>
+        <p class="text-xs text-slate-400 mt-1">Controle de macros, refeições e metas diárias</p>
+      </div>
+
+      <!-- Formulário de Login / Cadastro -->
+      <div id="form-auth-padrao" class="space-y-4">
         <div>
-          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">MacroFit Pro</h1>
-          <p class="text-xs text-slate-400">Nutrição & Controle de Metas</p>
+          <label class="text-xs font-semibold text-slate-300 block mb-1">Nome de Usuário</label>
+          <div class="relative">
+            <input type="text" id="auth-username" placeholder="Digite seu usuário" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-10 pr-3 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 transition">
+            <i class="fa-solid fa-user absolute left-3.5 top-3.5 text-slate-500 text-xs"></i>
+          </div>
         </div>
-      </div>
 
-      <div class="flex items-center gap-2">
-        <button onclick="abrirModalAuth()" id="btn-usuario" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition flex items-center gap-2 border border-slate-700/60 text-xs font-semibold">
-          <i class="fa-solid fa-user text-emerald-400"></i>
-          <span id="nome-usuario-logado">Entrar</span>
-        </button>
-
-        <button onclick="abrirModalConfig()" title="Configurar Servidor" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition flex items-center gap-2 border border-slate-700/60 text-xs font-medium">
-          <i class="fa-solid fa-server"></i>
-          <span id="status-indicator-dot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
-        </button>
-
-        <button onclick="abrirModalPerfil()" class="p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition flex items-center gap-2 border border-emerald-500/30 text-xs font-semibold">
-          <i class="fa-solid fa-user-gear"></i>
-          <span class="hidden sm:inline">Metas & TMB</span>
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
-
-    <!-- Navegação por Calendário -->
-    <section class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-      <div class="flex items-center gap-2">
-        <button onclick="alterarDia(-1)" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
-          <i class="fa-solid fa-chevron-left text-xs"></i>
-        </button>
-        <div class="relative">
-          <input type="date" id="input-data" onchange="selecionarData(this.value)" class="bg-slate-800 border border-slate-700 text-slate-200 text-sm font-semibold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
-        </div>
-        <button onclick="alterarDia(1)" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
-          <i class="fa-solid fa-chevron-right text-xs"></i>
-        </button>
-        <button onclick="definirHoje()" class="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 transition">
-          Hoje
-        </button>
-      </div>
-
-      <!-- Resumo Rápido de Água -->
-      <div class="flex items-center gap-3 bg-slate-950/60 border border-slate-800 px-4 py-2 rounded-xl">
-        <div class="flex items-center gap-2 text-cyan-400 text-sm font-semibold">
-          <i class="fa-solid fa-droplet animate-bounce"></i>
-          <span id="agua-atual">0</span> / <span id="agua-meta" class="text-slate-400 text-xs">2500</span> ml
-        </div>
-        <div class="flex items-center gap-1">
-          <button onclick="adicionarAgua(250)" class="px-2 py-1 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/50 rounded-lg text-xs font-bold transition">+250ml</button>
-          <button onclick="adicionarAgua(500)" class="px-2 py-1 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/50 rounded-lg text-xs font-bold transition">+500ml</button>
-          <button onclick="resetarAgua()" title="Zerar água" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg text-xs"><i class="fa-solid fa-rotate-left"></i></button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Resumo de Metas e Dashboard -->
-    <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 relative overflow-hidden shadow-sm">
-        <div class="flex justify-between items-start mb-2">
-          <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Energia / Calorias</span>
-          <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs"><i class="fa-solid fa-bolt"></i></span>
-        </div>
-        <div class="flex items-baseline gap-1">
-          <span id="total-kcal" class="text-3xl font-extrabold text-white">0</span>
-          <span class="text-xs text-slate-400">/ <span id="meta-kcal">2200</span> kcal</span>
-        </div>
-        <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="progresso-kcal" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full w-0 transition-all duration-500"></div>
-        </div>
-        <p id="saldo-kcal" class="mt-2 text-xs text-slate-400 font-medium">Restam 2200 kcal</p>
-      </div>
-
-      <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
-        <div class="flex justify-between items-start mb-2">
-          <span class="text-xs uppercase font-bold tracking-wider text-rose-400">Proteínas</span>
-          <span class="p-2 rounded-lg bg-rose-500/10 text-rose-400 text-xs"><i class="fa-solid fa-drumstick-bite"></i></span>
-        </div>
-        <div class="flex items-baseline gap-1">
-          <span id="total-prot" class="text-2xl font-bold text-white">0.0</span>
-          <span class="text-xs text-slate-400">/ <span id="meta-prot">160</span>g</span>
-        </div>
-        <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="progresso-prot" class="bg-rose-500 h-full w-0 transition-all duration-500"></div>
-        </div>
-      </div>
-
-      <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
-        <div class="flex justify-between items-start mb-2">
-          <span class="text-xs uppercase font-bold tracking-wider text-amber-400">Carboidratos</span>
-          <span class="p-2 rounded-lg bg-amber-500/10 text-amber-400 text-xs"><i class="fa-solid fa-wheat-awn"></i></span>
-        </div>
-        <div class="flex items-baseline gap-1">
-          <span id="total-carb" class="text-2xl font-bold text-white">0.0</span>
-          <span class="text-xs text-slate-400">/ <span id="meta-carb">250</span>g</span>
-        </div>
-        <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="progresso-carb" class="bg-amber-500 h-full w-0 transition-all duration-500"></div>
-        </div>
-      </div>
-
-      <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
-        <div class="flex justify-between items-start mb-2">
-          <span class="text-xs uppercase font-bold tracking-wider text-sky-400">Gorduras</span>
-          <span class="p-2 rounded-lg bg-sky-500/10 text-sky-400 text-xs"><i class="fa-solid fa-droplet"></i></span>
-        </div>
-        <div class="flex items-baseline gap-1">
-          <span id="total-fat" class="text-2xl font-bold text-white">0.0</span>
-          <span class="text-xs text-slate-400">/ <span id="meta-fat">60</span>g</span>
-        </div>
-        <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="progresso-fat" class="bg-sky-500 h-full w-0 transition-all duration-500"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Diário de Refeições -->
-    <div class="flex items-center justify-between pt-2">
-      <h2 class="text-base font-bold text-slate-200 flex items-center gap-2">
-        <i class="fa-solid fa-utensils text-emerald-400"></i> Diário de Refeições
-      </h2>
-      <button onclick="abrirModalNovaCategoria()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1.5">
-        <i class="fa-solid fa-plus text-xs"></i> Adicionar Categoria
-      </button>
-    </div>
-
-    <div id="container-refeicoes" class="space-y-4"></div>
-
-  </main>
-
-  <!-- MODAL: Login & Cadastro Multi-Usuário & Recuperação -->
-  <div id="modal-auth" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="font-bold text-slate-100 text-sm flex items-center gap-2">
-          <i class="fa-solid fa-user-shield text-emerald-400"></i> Perfil de Usuário
-        </h3>
-        <button onclick="fecharModalAuth()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <!-- Caixa 1: Usuário Logado -->
-      <div id="auth-box-logado" class="hidden space-y-4 text-center">
-        <p class="text-xs text-slate-300">Você está conectado como: <br><strong id="label-user-atual" class="text-emerald-400 text-base"></strong></p>
-        <button onclick="fazerLogout()" class="w-full py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition">
-          Sair da Conta / Trocar Usuário
-        </button>
-      </div>
-
-      <!-- Caixa 2: Login / Criação de Conta -->
-      <div id="auth-box-deslogado" class="space-y-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Nome de Usuário</label>
-          <input type="text" id="auth-username" placeholder="Ex: paulo ou keli" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
-        </div>
-        <div>
-          <label class="text-slate-400 block mb-1">Senha</label>
-          <input type="password" id="auth-password" placeholder="Sua senha secreta" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
-        </div>
-
-        <div class="flex justify-end">
-          <button onclick="alternarTelaRecuperacao(true)" class="text-[11px] text-emerald-400 hover:underline">Esqueceu a senha?</button>
+          <label class="text-xs font-semibold text-slate-300 block mb-1">Senha</label>
+          <div class="relative">
+            <input type="password" id="auth-password" placeholder="Digite sua senha" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-10 pr-3 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 transition">
+            <i class="fa-solid fa-lock absolute left-3.5 top-3.5 text-slate-500 text-xs"></i>
+          </div>
         </div>
 
-        <span id="auth-msg-status" class="text-[11px] block font-medium text-slate-400"></span>
+        <div class="flex justify-between items-center text-xs pt-1">
+          <button type="button" onclick="abrirConfigUrlRapida()" class="text-slate-500 hover:text-slate-300 flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-server text-[10px]"></i> <span id="portal-status-servidor">Configurar API</span>
+          </button>
+          <button type="button" onclick="alternarTelaRecuperacao(true)" class="text-emerald-400 hover:text-emerald-300 font-medium transition">
+            Esqueceu a senha?
+          </button>
+        </div>
 
-        <div class="pt-2 grid grid-cols-2 gap-2">
-          <button onclick="executarAuth('login')" class="py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold transition">Entrar</button>
-          <button onclick="executarAuth('register')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold border border-slate-700 transition">Criar Conta</button>
+        <span id="auth-portal-status" class="text-xs block text-center font-medium min-h-[16px]"></span>
+
+        <div class="grid grid-cols-2 gap-3 pt-2">
+          <button type="button" onclick="executarAuth('login')" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/10">
+            Entrar
+          </button>
+          <button type="button" onclick="executarAuth('register')" class="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-sm border border-slate-700 transition">
+            Criar Conta
+          </button>
         </div>
       </div>
 
-      <!-- Caixa 3: Recuperação de Senha com Chave Mestra -->
-      <div id="auth-box-recuperar" class="hidden space-y-3 text-xs">
-        <p class="text-[11px] text-slate-400">Informe o usuário, a chave mestra de recuperação e a nova senha desejada.</p>
+      <!-- Formulário de Recuperação de Senha -->
+      <div id="form-auth-recuperar" class="hidden space-y-3.5">
+        <p class="text-xs text-slate-400">Informe seu usuário, a chave mestra e crie uma nova senha.</p>
+        
         <div>
-          <label class="text-slate-400 block mb-1">Nome de Usuário</label>
-          <input type="text" id="rec-username" placeholder="Seu usuário cadastrado" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
-        </div>
-        <div>
-          <label class="text-slate-400 block mb-1">Chave Mestra de Segurança</label>
-          <input type="password" id="rec-chave" placeholder="Chave de recuperação" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
-        </div>
-        <div>
-          <label class="text-slate-400 block mb-1">Nova Senha</label>
-          <input type="password" id="rec-nova-senha" placeholder="Mínimo 4 caracteres" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+          <label class="text-xs font-semibold text-slate-300 block mb-1">Nome de Usuário</label>
+          <input type="text" id="rec-username" placeholder="Seu usuário cadastrado" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
 
-        <span id="rec-msg-status" class="text-[11px] block font-medium text-slate-400"></span>
+        <div>
+          <label class="text-xs font-semibold text-slate-300 block mb-1">Chave Mestra de Segurança</label>
+          <input type="password" id="rec-chave" placeholder="Chave de recuperação" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
 
-        <div class="pt-2 flex justify-between gap-2">
-          <button onclick="alternarTelaRecuperacao(false)" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold">Voltar</button>
-          <button onclick="executarRedefinicaoSenha()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition">Redefinir Senha</button>
+        <div>
+          <label class="text-xs font-semibold text-slate-300 block mb-1">Nova Senha</label>
+          <input type="password" id="rec-nova-senha" placeholder="Mínimo 4 caracteres" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <span id="rec-portal-status" class="text-xs block text-center font-medium min-h-[16px]"></span>
+
+        <div class="grid grid-cols-2 gap-3 pt-2">
+          <button type="button" onclick="alternarTelaRecuperacao(false)" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition">
+            Voltar
+          </button>
+          <button type="button" onclick="executarRedefinicaoSenha()" class="py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs transition">
+            Redefinir & Entrar
+          </button>
         </div>
       </div>
 
     </div>
+  </div>
+
+  <!-- ======================================================================
+       INTERFACE PRINCIPAL DO SISTEMA (EXIBIDA APENAS APÓS LOGIN)
+       ====================================================================== -->
+  <div id="painel-principal-app" class="hidden pb-16">
+    <!-- Cabeçalho Superior -->
+    <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <i class="fa-solid fa-fire text-slate-950 text-xl font-bold"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">MacroFit Pro</h1>
+            <p class="text-xs text-slate-400">Nutrição & Controle de Metas</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- Identificação do Usuário Ativo & Botão Sair -->
+          <div class="flex items-center bg-slate-800/80 border border-slate-700/70 rounded-xl pl-3 pr-1 py-1 text-xs">
+            <span class="flex items-center gap-1.5 font-semibold text-emerald-400 mr-2">
+              <i class="fa-solid fa-circle-user"></i>
+              <span id="nome-usuario-logado">Usuário</span>
+            </span>
+            <button onclick="fazerLogout()" title="Sair da conta" class="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-rose-400 transition text-xs">
+              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            </button>
+          </div>
+
+          <!-- Status / Configuração do Servidor -->
+          <button onclick="abrirModalConfig()" title="Configurar Servidor" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition flex items-center gap-2 border border-slate-700/60 text-xs font-medium">
+            <i class="fa-solid fa-server"></i>
+            <span id="status-indicator-dot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+          </button>
+
+          <!-- Metas & TMB -->
+          <button onclick="abrirModalPerfil()" class="p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition flex items-center gap-2 border border-emerald-500/30 text-xs font-semibold">
+            <i class="fa-solid fa-user-gear"></i>
+            <span class="hidden sm:inline">Metas & TMB</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+      <!-- Navegação por Calendário -->
+      <section class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+        <div class="flex items-center gap-2">
+          <button onclick="alterarDia(-1)" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
+            <i class="fa-solid fa-chevron-left text-xs"></i>
+          </button>
+          <div class="relative">
+            <input type="date" id="input-data" onchange="selecionarData(this.value)" class="bg-slate-800 border border-slate-700 text-slate-200 text-sm font-semibold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+          </div>
+          <button onclick="alterarDia(1)" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
+            <i class="fa-solid fa-chevron-right text-xs"></i>
+          </button>
+          <button onclick="definirHoje()" class="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 transition">
+            Hoje
+          </button>
+        </div>
+
+        <!-- Consumo de Água -->
+        <div class="flex items-center gap-3 bg-slate-950/60 border border-slate-800 px-4 py-2 rounded-xl">
+          <div class="flex items-center gap-2 text-cyan-400 text-sm font-semibold">
+            <i class="fa-solid fa-droplet animate-bounce"></i>
+            <span id="agua-atual">0</span> / <span id="agua-meta" class="text-slate-400 text-xs">2500</span> ml
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="adicionarAgua(250)" class="px-2 py-1 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/50 rounded-lg text-xs font-bold transition">+250ml</button>
+            <button onclick="adicionarAgua(500)" class="px-2 py-1 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/50 rounded-lg text-xs font-bold transition">+500ml</button>
+            <button onclick="resetarAgua()" title="Zerar água" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg text-xs"><i class="fa-solid fa-rotate-left"></i></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dashboard de Metas -->
+      <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 relative overflow-hidden shadow-sm">
+          <div class="flex justify-between items-start mb-2">
+            <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Energia / Calorias</span>
+            <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs"><i class="fa-solid fa-bolt"></i></span>
+          </div>
+          <div class="flex items-baseline gap-1">
+            <span id="total-kcal" class="text-3xl font-extrabold text-white">0</span>
+            <span class="text-xs text-slate-400">/ <span id="meta-kcal">2200</span> kcal</span>
+          </div>
+          <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+            <div id="progresso-kcal" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full w-0 transition-all duration-500"></div>
+          </div>
+          <p id="saldo-kcal" class="mt-2 text-xs text-slate-400 font-medium">Restam 2200 kcal</p>
+        </div>
+
+        <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
+          <div class="flex justify-between items-start mb-2">
+            <span class="text-xs uppercase font-bold tracking-wider text-rose-400">Proteínas</span>
+            <span class="p-2 rounded-lg bg-rose-500/10 text-rose-400 text-xs"><i class="fa-solid fa-drumstick-bite"></i></span>
+          </div>
+          <div class="flex items-baseline gap-1">
+            <span id="total-prot" class="text-2xl font-bold text-white">0.0</span>
+            <span class="text-xs text-slate-400">/ <span id="meta-prot">160</span>g</span>
+          </div>
+          <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+            <div id="progresso-prot" class="bg-rose-500 h-full w-0 transition-all duration-500"></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
+          <div class="flex justify-between items-start mb-2">
+            <span class="text-xs uppercase font-bold tracking-wider text-amber-400">Carboidratos</span>
+            <span class="p-2 rounded-lg bg-amber-500/10 text-amber-400 text-xs"><i class="fa-solid fa-wheat-awn"></i></span>
+          </div>
+          <div class="flex items-baseline gap-1">
+            <span id="total-carb" class="text-2xl font-bold text-white">0.0</span>
+            <span class="text-xs text-slate-400">/ <span id="meta-carb">250</span>g</span>
+          </div>
+          <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+            <div id="progresso-carb" class="bg-amber-500 h-full w-0 transition-all duration-500"></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
+          <div class="flex justify-between items-start mb-2">
+            <span class="text-xs uppercase font-bold tracking-wider text-sky-400">Gorduras</span>
+            <span class="p-2 rounded-lg bg-sky-500/10 text-sky-400 text-xs"><i class="fa-solid fa-droplet"></i></span>
+          </div>
+          <div class="flex items-baseline gap-1">
+            <span id="total-fat" class="text-2xl font-bold text-white">0.0</span>
+            <span class="text-xs text-slate-400">/ <span id="meta-fat">60</span>g</span>
+          </div>
+          <div class="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+            <div id="progresso-fat" class="bg-sky-500 h-full w-0 transition-all duration-500"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Diário de Refeições -->
+      <div class="flex items-center justify-between pt-2">
+        <h2 class="text-base font-bold text-slate-200 flex items-center gap-2">
+          <i class="fa-solid fa-utensils text-emerald-400"></i> Diário de Refeições
+        </h2>
+        <button onclick="abrirModalNovaCategoria()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-plus text-xs"></i> Adicionar Categoria
+        </button>
+      </div>
+
+      <div id="container-refeicoes" class="space-y-4"></div>
+    </main>
   </div>
 
   <!-- MODAL: Configurar URL do Backend -->
@@ -285,7 +317,7 @@
         </button>
       </div>
 
-      <!-- Painel do Alimento Selecionado -->
+      <!-- Painel de Porção -->
       <div id="painel-calculo-porcao" class="border-t border-slate-800 pt-3 space-y-3 hidden">
         <div class="bg-slate-800/40 border border-slate-700/60 rounded-xl p-3">
           <div class="flex justify-between items-start">
@@ -469,10 +501,10 @@
     </div>
   </div>
 
+  <!-- ======================================================================
+       LÓGICA JAVASCRIPT
+       ====================================================================== -->
   <script>
-    /* ==========================================================================
-       1. ESTADO GLOBAL
-       ========================================================================== */
     let dataAtual = new Date().toISOString().split('T')[0];
     let debounceTimer = null;
     let categoriaAlvo = null;
@@ -493,59 +525,65 @@
     let diarioAtual = {};
     let aguaAtual = 0;
 
-    /* ==========================================================================
-       2. INICIALIZAÇÃO
-       ========================================================================== */
     window.addEventListener('DOMContentLoaded', () => {
       document.getElementById('input-data').value = dataAtual;
       document.getElementById('cfg-backend-url').value = configApp.backendUrl;
-      atualizarInterfaceUsuario();
-      renderizarEstruturaRefeicoes();
-      carregarDadosDoDia();
+
+      // Controle de Tela: Se já possui login salvo, vai direto ao painel
+      if (usuarioAtual && tokenAuth) {
+        mostrarPainelPrincipal();
+      } else {
+        mostrarTelaLogin();
+      }
+
       if (configApp.backendUrl) testarConexaoBackend(false);
     });
 
-    function atualizarInterfaceUsuario() {
-      const lbl = document.getElementById('nome-usuario-logado');
-      const boxLogado = document.getElementById('auth-box-logado');
-      const boxDeslogado = document.getElementById('auth-box-deslogado');
-      const boxRecuperar = document.getElementById('auth-box-recuperar');
-      const lblAtual = document.getElementById('label-user-atual');
+    function mostrarPainelPrincipal() {
+      document.getElementById('tela-login-portal').classList.add('hidden');
+      document.getElementById('painel-principal-app').classList.remove('hidden');
+      document.getElementById('nome-usuario-logado').textContent = usuarioAtual.charAt(0).toUpperCase() + usuarioAtual.slice(1);
+      renderizarEstruturaRefeicoes();
+      carregarDadosDoDia();
+    }
 
-      boxRecuperar.classList.add('hidden');
+    function mostrarTelaLogin() {
+      document.getElementById('painel-principal-app').classList.add('hidden');
+      document.getElementById('tela-login-portal').classList.remove('hidden');
+      alternarTelaRecuperacao(false);
+      atualizarStatusServidorNoPortal();
+    }
 
-      if (usuarioAtual && tokenAuth) {
-        lbl.textContent = usuarioAtual.charAt(0).toUpperCase() + usuarioAtual.slice(1);
-        lblAtual.textContent = usuarioAtual;
-        boxLogado.classList.remove('hidden');
-        boxDeslogado.classList.add('hidden');
+    function atualizarStatusServidorNoPortal() {
+      const lbl = document.getElementById('portal-status-servidor');
+      if (configApp.backendUrl) {
+        lbl.textContent = "API Configurada";
       } else {
-        lbl.textContent = "Entrar";
-        boxLogado.classList.add('hidden');
-        boxDeslogado.classList.remove('hidden');
+        lbl.textContent = "Definir URL API";
       }
     }
 
-    /* ==========================================================================
-       3. AUTENTICAÇÃO E RECUPERAÇÃO
-       ========================================================================== */
-    function abrirModalAuth() { document.getElementById('modal-auth').classList.remove('hidden'); }
-    function fecharModalAuth() { document.getElementById('modal-auth').classList.add('hidden'); }
+    function abrirConfigUrlRapida() {
+      abrirModalConfig();
+    }
 
+    /* ==========================================================================
+       AUTENTICAÇÃO E RECUPERAÇÃO
+       ========================================================================== */
     function alternarTelaRecuperacao(mostrarRecuperacao) {
-      document.getElementById('auth-box-deslogado').classList.toggle('hidden', mostrarRecuperacao);
-      document.getElementById('auth-box-recuperar').classList.toggle('hidden', !mostrarRecuperacao);
-      document.getElementById('rec-msg-status').innerHTML = '';
-      document.getElementById('auth-msg-status').innerHTML = '';
+      document.getElementById('form-auth-padrao').classList.toggle('hidden', mostrarRecuperacao);
+      document.getElementById('form-auth-recuperar').classList.toggle('hidden', !mostrarRecuperacao);
+      document.getElementById('rec-portal-status').innerHTML = '';
+      document.getElementById('auth-portal-status').innerHTML = '';
     }
 
     async function executarAuth(tipo) {
       const username = document.getElementById('auth-username').value.trim();
       const password = document.getElementById('auth-password').value.trim();
-      const msg = document.getElementById('auth-msg-status');
+      const msg = document.getElementById('auth-portal-status');
 
       if (!configApp.backendUrl) {
-        msg.innerHTML = "<span class='text-rose-400'>Configure a URL do servidor no botão de rede primeiro!</span>";
+        msg.innerHTML = "<span class='text-rose-400'>Configure a URL da API no botão abaixo primeiro!</span>";
         return;
       }
       if (!username || !password) {
@@ -553,7 +591,7 @@
         return;
       }
 
-      msg.innerHTML = "<span class='text-cyan-400'><i class='fa-solid fa-spinner fa-spin'></i> Processando...</span>";
+      msg.innerHTML = "<span class='text-cyan-400'><i class='fa-solid fa-spinner fa-spin'></i> Conectando...</span>";
 
       try {
         const resp = await fetch(`${configApp.backendUrl}/api/auth/${tipo}`, {
@@ -568,11 +606,12 @@
           tokenAuth = data.token;
           localStorage.setItem('macrofit_usuario', usuarioAtual);
           localStorage.setItem('macrofit_token', tokenAuth);
-          atualizarInterfaceUsuario();
-          fecharModalAuth();
-          carregarDadosDoDia();
+          msg.innerHTML = '';
+          document.getElementById('auth-username').value = '';
+          document.getElementById('auth-password').value = '';
+          mostrarPainelPrincipal();
         } else {
-          msg.innerHTML = `<span class='text-rose-400'>${data.detail || 'Erro na operação.'}</span>`;
+          msg.innerHTML = `<span class='text-rose-400'>${data.detail || 'Falha na autenticação.'}</span>`;
         }
       } catch (e) {
         msg.innerHTML = "<span class='text-rose-400'>Erro ao conectar com o servidor.</span>";
@@ -583,7 +622,7 @@
       const username = document.getElementById('rec-username').value.trim();
       const chave_mestra = document.getElementById('rec-chave').value.trim();
       const nova_senha = document.getElementById('rec-nova-senha').value.trim();
-      const msg = document.getElementById('rec-msg-status');
+      const msg = document.getElementById('rec-portal-status');
 
       if (!configApp.backendUrl) {
         msg.innerHTML = "<span class='text-rose-400'>Servidor não configurado.</span>";
@@ -609,10 +648,9 @@
           tokenAuth = data.token;
           localStorage.setItem('macrofit_usuario', usuarioAtual);
           localStorage.setItem('macrofit_token', tokenAuth);
-          alert("Senha redefinida com sucesso! Você já está conectado.");
-          atualizarInterfaceUsuario();
-          fecharModalAuth();
-          carregarDadosDoDia();
+          alert("Senha redefinida com sucesso!");
+          msg.innerHTML = '';
+          mostrarPainelPrincipal();
         } else {
           msg.innerHTML = `<span class='text-rose-400'>${data.detail || 'Falha ao redefinir.'}</span>`;
         }
@@ -626,15 +664,13 @@
       tokenAuth = null;
       localStorage.removeItem('macrofit_usuario');
       localStorage.removeItem('macrofit_token');
-      atualizarInterfaceUsuario();
-      fecharModalAuth();
       diarioAtual = {};
       aguaAtual = 0;
-      renderizarDiarioAtual();
+      mostrarTelaLogin();
     }
 
     /* ==========================================================================
-       4. SINCRONIZAÇÃO COMPLETA
+       SINCRONIZAÇÃO COMPLETA DE DADOS
        ========================================================================== */
     async function carregarDadosDoDia() {
       if (configApp.backendUrl && tokenAuth) {
@@ -662,7 +698,7 @@
     }
 
     /* ==========================================================================
-       5. ÁGUA E METAS
+       ÁGUA E METAS
        ========================================================================== */
     function adicionarAgua(qtd) {
       aguaAtual += qtd;
@@ -733,7 +769,7 @@
     }
 
     /* ==========================================================================
-       6. DIÁRIO DE REFEIÇÕES
+       DIÁRIO DE REFEIÇÕES
        ========================================================================== */
     function renderizarEstruturaRefeicoes() {
       const container = document.getElementById('container-refeicoes');
@@ -892,7 +928,7 @@
     }
 
     /* ==========================================================================
-       7. BUSCA DE ALIMENTOS COM RESILIÊNCIA E TACO LOCAL
+       BUSCA DE ALIMENTOS COM RESILIÊNCIA E BASE TACO LOCAL
        ========================================================================== */
     function normalizarTexto(txt) {
       return (txt || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -919,7 +955,6 @@
 
       const termoNorm = normalizarTexto(termo);
 
-      // 1. Tenta buscar no Servidor
       if (configApp.backendUrl) {
         try {
           const controller = new AbortController();
@@ -937,11 +972,10 @@
             }
           }
         } catch (e) {
-          console.warn("Backend indisponível ou timeout", e);
+          console.warn("Backend indisponível", e);
         }
       }
 
-      // 2. Se o servidor retornou 0 itens ou falhou, ativa a base TACO offline local
       if (itensRetornados.length === 0) {
         fonteUsada = "TACO Local";
         const baseOffline = [
@@ -1020,7 +1054,7 @@
     }
 
     /* ==========================================================================
-       8. CADASTRO MANUAL
+       CADASTRO MANUAL
        ========================================================================== */
     function abrirModalCadastroManual() {
       document.getElementById('man-nome').value = document.getElementById('busca-alimento-input').value.trim();
@@ -1058,7 +1092,7 @@
     }
 
     /* ==========================================================================
-       9. NAVEGAÇÃO & MODAIS
+       NAVEGAÇÃO & MODAIS
        ========================================================================== */
     function alterarDia(delta) {
       const dt = new Date(dataAtual + "T00:00:00");
@@ -1104,6 +1138,7 @@
       configApp.backendUrl = url;
       localStorage.setItem('macrofit_backend_url', url);
       testarConexaoBackend(false);
+      atualizarStatusServidorNoPortal();
       fecharModalConfig();
     }
 
