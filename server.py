@@ -21,6 +21,11 @@ app.add_middleware(
 
 DB_PATH = "alimentos_cache.db"
 
+# ==============================================================================
+# CHAVE MESTRA PARA RECUPERAÇÃO DE SENHA (Altere se desejar)
+# ==============================================================================
+CHAVE_MESTRA_RECUPERACAO = os.getenv("MACROFIT_RESET_KEY", "macrofit2026")
+
 FATSECRET_CLIENT_ID = os.getenv("FATSECRET_CLIENT_ID", "fe6063cade4b4ca3ba6487f3d521c556")
 FATSECRET_CLIENT_SECRET = os.getenv("FATSECRET_CLIENT_SECRET", "a4833d40ca15452392896fb1efa1bc64")
 
@@ -33,6 +38,11 @@ token_cache = {
 class AuthRequest(BaseModel):
     username: str
     password: str
+
+class ResetPasswordRequest(BaseModel):
+    username: str
+    chave_mestra: str
+    nova_senha: str
 
 class MetasModel(BaseModel):
     kcal: int
@@ -80,7 +90,6 @@ def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         
-        # Tabela de Usuários
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +100,6 @@ def init_db():
             )
         """)
 
-        # Metas individuais por usuário
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS metas_usuario (
                 user_id INTEGER PRIMARY KEY,
@@ -104,7 +112,6 @@ def init_db():
             )
         """)
 
-        # Registro de Água por Usuário e Dia
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS consumo_agua (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,7 +123,6 @@ def init_db():
             )
         """)
 
-        # Registro de Refeições do Diário por Usuário
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS diario_refeicoes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,7 +141,6 @@ def init_db():
             )
         """)
 
-        # Tabela de Alimentos Compartilhada
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS alimentos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,7 +159,7 @@ def init_db():
 
 init_db()
 
-# --- AUTENTICAÇÃO ---
+# --- AUTENTICAÇÃO E RECUPERAÇÃO ---
 def obter_usuario_por_token(token: str) -> int:
     if not token:
         raise HTTPException(status_code=401, detail="Token não fornecido")
@@ -205,6 +210,29 @@ def login(auth: AuthRequest):
 
     return {"status": "ok", "token": token, "username": u}
 
+@app.post("/api/auth/reset-password")
+def reset_password(req: ResetPasswordRequest):
+    u = req.username.strip().lower()
+    if req.chave_mestra.strip() != CHAVE_MESTRA_RECUPERACAO:
+        raise HTTPException(status_code=403, detail="Chave mestra incorreta.")
+    
+    if len(req.nova_senha) < 4:
+        raise HTTPException(status_code=400, detail="A nova senha deve ter no mínimo 4 caracteres.")
+
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM usuarios WHERE username = ?", (u,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+        
+        novo_hash = hash_senha(req.nova_senha)
+        token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
+        cursor.execute("UPDATE usuarios SET senha_hash = ?, token = ? WHERE id = ?", (novo_hash, token, row[0]))
+        conn.commit()
+
+    return {"status": "ok", "token": token, "username": u, "mensagem": "Senha redefinida com sucesso!"}
+
 # --- METAS & CONSUMO DO USUÁRIO ---
 @app.get("/api/usuario/dados-completos")
 def obter_dados_usuario(data: str = Query(...), authorization: Optional[str] = Header(None)):
@@ -214,16 +242,13 @@ def obter_dados_usuario(data: str = Query(...), authorization: Optional[str] = H
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Metas
         cursor.execute("SELECT kcal, prot, carb, fat, agua FROM metas_usuario WHERE user_id = ?", (user_id,))
         metas = dict(cursor.fetchone() or {"kcal": 2200, "prot": 160, "carb": 250, "fat": 60, "agua": 2500})
 
-        # Água do Dia
         cursor.execute("SELECT quantidade FROM consumo_agua WHERE user_id = ? AND data = ?", (user_id, data))
         row_agua = cursor.fetchone()
         agua = row_agua["quantidade"] if row_agua else 0.0
 
-        # Refeições do Dia
         cursor.execute("""
             SELECT id, categoria, nome, marca, quantidade, unidade_desc, calorias, proteinas, carboidratos, gorduras 
             FROM diario_refeicoes 
