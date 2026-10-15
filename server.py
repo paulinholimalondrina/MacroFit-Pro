@@ -21,11 +21,7 @@ app.add_middleware(
 
 DB_PATH = "alimentos_cache.db"
 
-# ==============================================================================
-# CHAVE MESTRA PARA RECUPERAÇÃO DE SENHA (Altere se desejar)
-# ==============================================================================
 CHAVE_MESTRA_RECUPERACAO = os.getenv("MACROFIT_RESET_KEY", "macrofit2026")
-
 FATSECRET_CLIENT_ID = os.getenv("FATSECRET_CLIENT_ID", "fe6063cade4b4ca3ba6487f3d521c556")
 FATSECRET_CLIENT_SECRET = os.getenv("FATSECRET_CLIENT_SECRET", "a4833d40ca15452392896fb1efa1bc64")
 
@@ -34,7 +30,7 @@ token_cache = {
     "expires_at": 0
 }
 
-# --- MODELOS PYDANTIC ---
+# --- MODELOS ---
 class AuthRequest(BaseModel):
     username: str
     password: str
@@ -75,7 +71,6 @@ class AlimentoManual(BaseModel):
     carboidratos: float
     gorduras: float
 
-# --- FUNÇÕES UTILITÁRIAS ---
 def hash_senha(senha: str) -> str:
     return hashlib.sha256(senha.encode()).hexdigest()
 
@@ -85,11 +80,59 @@ def remover_acentos(texto: str) -> str:
     nfkd = unicodedata.normalize('NFKD', str(texto))
     return "".join([c for c in nfkd if not unicodedata.combining(c)]).lower().strip()
 
-# --- INICIALIZAÇÃO DO BANCO DE DADOS ---
+# --- BASE DE ALIMENTOS COMPLETA TACO & MARCAS ---
+BASE_TACO_EXPANDIDA = [
+    ("Arroz Branco Cozido", "Cereais / TACO", 128.0, 2.5, 28.1, 0.2),
+    ("Arroz Integral Cozido", "Cereais / TACO", 124.0, 2.6, 25.8, 1.0),
+    ("Feijão Carioca Cozido", "Leguminosas / TACO", 76.0, 4.8, 13.6, 0.5),
+    ("Feijão Preto Cozido", "Leguminosas / TACO", 77.0, 4.5, 14.0, 0.5),
+    ("Peito de Frango Grelhado", "Aves / TACO", 159.0, 32.0, 0.0, 2.5),
+    ("Peito de Frango Cozido Desfiado", "Aves / TACO", 163.0, 31.5, 0.0, 3.2),
+    ("Carne Bovina Patinho Grelhado", "Carnes / TACO", 219.0, 35.9, 0.0, 7.3),
+    ("Carne Moída Patinho Refogada", "Preparo Caseiro", 225.0, 32.0, 0.0, 10.0),
+    ("Ovo de Galinha Inteiro Cozido", "Ovos / TACO", 146.0, 13.3, 0.6, 9.5),
+    ("Clara de Ovo Cozida", "Ovos / TACO", 52.0, 11.0, 0.7, 0.2),
+    ("Ovo de Galinha Frito", "Preparo Caseiro", 240.0, 15.6, 1.2, 18.6),
+    ("Brócolis Cozido", "Hortifrúti / TACO", 25.0, 2.1, 4.4, 0.5),
+    ("Brócolis Cru", "Hortifrúti / TACO", 25.0, 3.6, 4.0, 0.3),
+    ("Batata Doce Cozida", "Hortifrúti / TACO", 77.0, 0.6, 18.4, 0.1),
+    ("Batata Inglesa Cozida", "Hortifrúti / TACO", 52.0, 1.2, 11.9, 0.1),
+    ("Banana Prata Crua", "Fruta / TACO", 98.0, 1.3, 26.0, 0.1),
+    ("Banana Nanica Crua", "Fruta / TACO", 92.0, 1.4, 23.8, 0.1),
+    ("Maçã Fuji com Casca", "Fruta / TACO", 56.0, 0.3, 15.2, 0.2),
+    ("Aveia em Flocos Finos", "Quaker / TACO", 394.0, 13.9, 66.6, 8.5),
+    ("Pão de Forma Tradicional", "Panificação / TACO", 265.0, 8.0, 50.0, 3.2),
+    ("Pão de Forma Integral", "Panificação / TACO", 247.0, 9.4, 46.0, 3.7),
+    ("Pão Francês Tradicional", "Padaria / TACO", 300.0, 8.0, 58.7, 3.1),
+    ("Goma de Tapioca Hidratada", "Típico", 240.0, 0.1, 60.0, 0.0),
+    ("Macarrão de Sêmola Cozido", "Massas / TACO", 140.0, 4.6, 28.8, 0.5),
+    ("Leite Integral UHT", "Piracanjuba", 61.0, 3.1, 4.7, 3.2),
+    ("Leite Desnatado UHT", "Piracanjuba", 35.0, 3.2, 4.9, 0.0),
+    ("Leite Semidesnatado UHT", "Piracanjuba", 46.0, 3.1, 4.8, 1.5),
+    ("Leite Integral UHT", "Itambé", 60.0, 3.0, 4.5, 3.2),
+    ("Leite Desnatado UHT", "Itambé", 34.0, 3.1, 4.8, 0.0),
+    ("Leite Integral", "Batavo", 60.0, 3.0, 4.5, 3.2),
+    ("Leite Desnatado", "Batavo", 35.0, 3.1, 4.9, 0.0),
+    ("Iogurte Grego Tradicional", "Vigor", 130.0, 4.8, 14.0, 6.2),
+    ("Iogurte Grego Zero Gordura", "Vigor", 65.0, 7.0, 9.0, 0.0),
+    ("Requeijão Tradicional", "Vigor", 257.0, 9.6, 3.0, 23.0),
+    ("Requeijão Light", "Vigor", 170.0, 11.0, 3.5, 12.0),
+    ("Queijo Minas Frescal", "Laticínios / TACO", 264.0, 17.4, 3.2, 20.2),
+    ("Queijo Mussarela Fatiado", "Laticínios / TACO", 330.0, 22.0, 2.0, 26.0),
+    ("100% Whey Concentrate", "Growth Supplements", 400.0, 80.0, 9.0, 5.0),
+    ("100% Whey Isolate", "Growth Supplements", 365.0, 90.0, 2.0, 0.5),
+    ("Creatina Creapure 100% Pura", "Growth Supplements", 0.0, 0.0, 0.0, 0.0),
+    ("Pasta de Amendoim Integral", "Growth Supplements", 588.0, 28.0, 18.0, 49.0),
+    ("100% Pure Whey", "Probiótica", 405.0, 76.0, 10.0, 6.0),
+    ("100% Whey Refil", "Max Titanium", 400.0, 75.0, 11.0, 5.5),
+    ("100% Whey Gold Standard", "Optimum Nutrition", 398.0, 78.0, 8.0, 4.0),
+    ("Nescau 2.0 Achocolatado em Pó", "Nestlé", 380.0, 3.5, 85.0, 2.8),
+    ("Azeite de Oliva Extra Virgem", "Gorduras / TACO", 884.0, 0.0, 0.0, 100.0)
+]
+
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,7 +142,6 @@ def init_db():
                 criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS metas_usuario (
                 user_id INTEGER PRIMARY KEY,
@@ -111,7 +153,6 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES usuarios(id)
             )
         """)
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS consumo_agua (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,7 +163,6 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES usuarios(id)
             )
         """)
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS diario_refeicoes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,7 +180,6 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES usuarios(id)
             )
         """)
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS alimentos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,11 +194,19 @@ def init_db():
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_nome ON alimentos(nome);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_diario ON diario_refeicoes(user_id, data);")
+
+        # Garante a inserção da base de alimentos se o banco estiver vazio
+        for nome, marca, kcal, prot, carb, fat in BASE_TACO_EXPANDIDA:
+            cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = ? AND LOWER(marca) = ?", (nome.lower(), marca.lower()))
+            if not cursor.fetchone():
+                cursor.execute("""
+                    INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
+                    VALUES (?, ?, ?, ?, ?, ?, 'TACO_LOCAL')
+                """, (nome, marca, kcal, prot, carb, fat))
         conn.commit()
 
 init_db()
 
-# --- AUTENTICAÇÃO E RECUPERAÇÃO ---
 def obter_usuario_por_token(token: str) -> int:
     if not token:
         raise HTTPException(status_code=401, detail="Token não fornecido")
@@ -176,21 +223,17 @@ def register(auth: AuthRequest):
     u = auth.username.strip().lower()
     if len(u) < 3 or len(auth.password) < 4:
         raise HTTPException(status_code=400, detail="Usuário deve ter min 3 letras e senha min 4 caracteres")
-    
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM usuarios WHERE username = ?", (u,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Este nome de usuário já existe.")
-        
         token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
         cursor.execute("INSERT INTO usuarios (username, senha_hash, token) VALUES (?, ?, ?)", 
                        (u, hash_senha(auth.password), token))
         user_id = cursor.lastrowid
-
         cursor.execute("INSERT INTO metas_usuario (user_id) VALUES (?)", (user_id,))
         conn.commit()
-
     return {"status": "ok", "token": token, "username": u}
 
 @app.post("/api/auth/login")
@@ -203,11 +246,9 @@ def login(auth: AuthRequest):
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=400, detail="Usuário ou senha incorretos")
-        
         token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
         cursor.execute("UPDATE usuarios SET token = ? WHERE id = ?", (token, row[0]))
         conn.commit()
-
     return {"status": "ok", "token": token, "username": u}
 
 @app.post("/api/auth/reset-password")
@@ -215,7 +256,6 @@ def reset_password(req: ResetPasswordRequest):
     u = req.username.strip().lower()
     if req.chave_mestra.strip() != CHAVE_MESTRA_RECUPERACAO:
         raise HTTPException(status_code=403, detail="Chave mestra incorreta.")
-    
     if len(req.nova_senha) < 4:
         raise HTTPException(status_code=400, detail="A nova senha deve ter no mínimo 4 caracteres.")
 
@@ -225,23 +265,18 @@ def reset_password(req: ResetPasswordRequest):
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-        
         novo_hash = hash_senha(req.nova_senha)
         token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
         cursor.execute("UPDATE usuarios SET senha_hash = ?, token = ? WHERE id = ?", (novo_hash, token, row[0]))
         conn.commit()
+    return {"status": "ok", "token": token, "username": u}
 
-    return {"status": "ok", "token": token, "username": u, "mensagem": "Senha redefinida com sucesso!"}
-
-# --- METAS & CONSUMO DO USUÁRIO ---
 @app.get("/api/usuario/dados-completos")
 def obter_dados_usuario(data: str = Query(...), authorization: Optional[str] = Header(None)):
     user_id = obter_usuario_por_token(authorization)
-    
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-
         cursor.execute("SELECT kcal, prot, carb, fat, agua FROM metas_usuario WHERE user_id = ?", (user_id,))
         metas = dict(cursor.fetchone() or {"kcal": 2200, "prot": 160, "carb": 250, "fat": 60, "agua": 2500})
 
@@ -254,7 +289,6 @@ def obter_dados_usuario(data: str = Query(...), authorization: Optional[str] = H
             FROM diario_refeicoes 
             WHERE user_id = ? AND data = ?
         """, (user_id, data))
-        
         diario = {}
         for r in cursor.fetchall():
             cat = r["categoria"]
@@ -271,12 +305,7 @@ def obter_dados_usuario(data: str = Query(...), authorization: Optional[str] = H
                 "carboidratos": r["carboidratos"],
                 "gorduras": r["gorduras"]
             })
-
-    return {
-        "metas": metas,
-        "agua": agua,
-        "diario": diario
-    }
+    return {"metas": metas, "agua": agua, "diario": diario}
 
 @app.post("/api/usuario/metas")
 def salvar_metas(m: MetasModel, authorization: Optional[str] = Header(None)):
@@ -328,7 +357,6 @@ def remover_item_refeicao(item_id: int, authorization: Optional[str] = Header(No
         conn.commit()
     return {"status": "ok"}
 
-# --- BUSCA DE ALIMENTOS & FATSECRET ---
 async def obter_token_fatsecret():
     agora = time.time()
     if token_cache["access_token"] and token_cache["expires_at"] > agora:
@@ -336,7 +364,6 @@ async def obter_token_fatsecret():
 
     auth_url = "https://oauth.fatsecret.com/connect/token"
     data = {"grant_type": "client_credentials", "scope": "basic"}
-
     try:
         async with httpx.AsyncClient(timeout=6.0) as client:
             resp = await client.post(auth_url, data=data, auth=(FATSECRET_CLIENT_ID, FATSECRET_CLIENT_SECRET))
@@ -346,7 +373,7 @@ async def obter_token_fatsecret():
                 token_cache["expires_at"] = agora + float(token_data.get("expires_in", 86400)) - 60
                 return token_cache["access_token"]
     except Exception as e:
-        print(f"Erro token FatSecret: {e}")
+        print(f"Erro FatSecret: {e}")
     return None
 
 @app.post("/api/alimentos")
@@ -376,7 +403,7 @@ async def buscar_alimentos(q: str = Query(..., min_length=2)):
             if all(p in n_limpo or p in m_limpo for p in palavras_busca):
                 resultados_locais.append(dict(r))
 
-    if len(resultados_locais) >= 8:
+    if len(resultados_locais) >= 6:
         return {"origem": "taco_local", "total": len(resultados_locais), "itens": resultados_locais}
 
     token = await obter_token_fatsecret()
@@ -438,7 +465,7 @@ async def buscar_alimentos(q: str = Query(..., min_length=2)):
                                     "fonte": "FATSECRET"
                                 })
         except Exception as e:
-            print(f"Erro na busca FatSecret: {e}")
+            print(f"Erro FatSecret: {e}")
 
     nomes_vistos = set()
     resultado_final = []
