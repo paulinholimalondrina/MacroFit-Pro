@@ -892,7 +892,7 @@
     }
 
     /* ==========================================================================
-       7. BUSCA DE ALIMENTOS
+       7. BUSCA DE ALIMENTOS COM RESILIÊNCIA E TACO LOCAL
        ========================================================================== */
     function normalizarTexto(txt) {
       return (txt || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -915,11 +915,15 @@
       const tagStatus = document.getElementById('tag-origem-status');
       const infoOrigem = document.getElementById('info-origem-busca');
       let itensRetornados = [];
+      let fonteUsada = "";
 
+      const termoNorm = normalizarTexto(termo);
+
+      // 1. Tenta buscar no Servidor
       if (configApp.backendUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const timeoutId = setTimeout(() => controller.abort(), 7000);
           const resp = await fetch(`${configApp.backendUrl}/api/alimentos?q=${encodeURIComponent(termo)}`, { signal: controller.signal });
           clearTimeout(timeoutId);
 
@@ -927,17 +931,46 @@
             const data = await resp.json();
             if (data.itens && data.itens.length > 0) {
               itensRetornados = data.itens;
+              fonteUsada = data.origem === 'taco_local' ? 'Servidor (Base TACO)' : 'Servidor (FatSecret/Cache)';
               tagStatus.className = "px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold";
               tagStatus.textContent = "Servidor Online";
             }
           }
         } catch (e) {
-          console.warn("Backend indisponível", e);
+          console.warn("Backend indisponível ou timeout", e);
+        }
+      }
+
+      // 2. Se o servidor retornou 0 itens ou falhou, ativa a base TACO offline local
+      if (itensRetornados.length === 0) {
+        fonteUsada = "TACO Local";
+        const baseOffline = [
+          { nome: "Arroz Branco Cozido", marca: "Cereais / TACO", calorias: 128, proteinas: 2.5, carboidratos: 28.1, gorduras: 0.2, fonte: "TACO" },
+          { nome: "Arroz Integral Cozido", marca: "Cereais / TACO", calorias: 124, proteinas: 2.6, carboidratos: 25.8, gorduras: 1.0, fonte: "TACO" },
+          { nome: "Feijão Carioca Cozido", marca: "Leguminosas / TACO", calorias: 76, proteinas: 4.8, carboidratos: 13.6, gorduras: 0.5, fonte: "TACO" },
+          { nome: "Peito de Frango Grelhado", marca: "Aves / TACO", calorias: 159, proteinas: 32.0, carboidratos: 0.0, gorduras: 2.5, fonte: "TACO" },
+          { nome: "Carne Bovina Patinho Grelhado", marca: "Carnes / TACO", calorias: 219, proteinas: 35.9, carboidratos: 0.0, gorduras: 7.3, fonte: "TACO" },
+          { nome: "Ovo de Galinha Inteiro Cozido", marca: "Ovos / TACO", calorias: 146, proteinas: 13.3, carboidratos: 0.6, gorduras: 9.5, fonte: "TACO" },
+          { nome: "Banana Prata Crua", marca: "Frutas", calorias: 98, proteinas: 1.3, carboidratos: 26.0, gorduras: 0.1, fonte: "TACO" },
+          { nome: "Brócolis Cozido", marca: "Hortifrúti / TACO", calorias: 25, proteinas: 2.1, carboidratos: 4.4, gorduras: 0.5, fonte: "TACO" },
+          { nome: "Aveia em Flocos", marca: "Quaker", calorias: 394, proteinas: 13.9, carboidratos: 66.6, gorduras: 8.5, fonte: "TACO" },
+          { nome: "100% Whey Concentrate", marca: "Growth Supplements", calorias: 400, proteinas: 80.0, carboidratos: 9.0, gorduras: 5.0, fonte: "Suplementos" },
+          { nome: "Nescau 2.0 em Pó", marca: "Nestlé", calorias: 380, proteinas: 3.5, carboidratos: 85.0, gorduras: 2.8, fonte: "Achocolatados" }
+        ];
+
+        itensRetornados = baseOffline.filter(item => 
+          normalizarTexto(item.nome).includes(termoNorm) || 
+          normalizarTexto(item.marca).includes(termoNorm)
+        );
+
+        if (tagStatus.textContent !== "Servidor Online") {
+          tagStatus.className = "px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-semibold";
+          tagStatus.textContent = "Fallback TACO";
         }
       }
 
       spinner.classList.add('hidden');
-      infoOrigem.textContent = `${itensRetornados.length} itens encontrados`;
+      infoOrigem.textContent = `${itensRetornados.length} itens encontrados via ${fonteUsada}`;
       renderizarResultadosBusca(itensRetornados);
     }
 
