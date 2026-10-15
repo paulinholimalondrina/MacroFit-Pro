@@ -49,6 +49,12 @@ class MetasModel(BaseModel):
     carb: float
     fat: float
     agua: int
+    genero: Optional[str] = "m"
+    idade: Optional[float] = 30.0
+    peso: Optional[float] = 75.0
+    altura: Optional[float] = 175.0
+    atividade: Optional[float] = 1.55
+    objetivo: Optional[float] = 0.0
 
 class AguaModel(BaseModel):
     data: str
@@ -198,9 +204,30 @@ def init_db():
                 carb REAL DEFAULT 250.0,
                 fat REAL DEFAULT 60.0,
                 agua INTEGER DEFAULT 2500,
+                genero TEXT DEFAULT 'm',
+                idade REAL DEFAULT 30.0,
+                peso REAL DEFAULT 75.0,
+                altura REAL DEFAULT 175.0,
+                atividade REAL DEFAULT 1.55,
+                objetivo REAL DEFAULT 0.0,
                 FOREIGN KEY (user_id) REFERENCES usuarios(id)
             )
         """)
+
+        # Migração transparente: adiciona as colunas novas sem recriar tabela nem apagar dados
+        cursor.execute("PRAGMA table_info(metas_usuario)")
+        colunas_existentes = [col[1] for col in cursor.fetchall()]
+        novas_colunas = [
+            ("genero", "TEXT DEFAULT 'm'"),
+            ("idade", "REAL DEFAULT 30.0"),
+            ("peso", "REAL DEFAULT 75.0"),
+            ("altura", "REAL DEFAULT 175.0"),
+            ("atividade", "REAL DEFAULT 1.55"),
+            ("objetivo", "REAL DEFAULT 0.0")
+        ]
+        for nome_col, tipo_col in novas_colunas:
+            if nome_col not in colunas_existentes:
+                cursor.execute(f"ALTER TABLE metas_usuario ADD COLUMN {nome_col} {tipo_col}")
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS consumo_agua (
@@ -246,7 +273,6 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_nome ON alimentos(nome);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_diario ON diario_refeicoes(user_id, data);")
 
-        # Inserção automática de todos os alimentos da TACO e suplementos
         for nome, marca, kcal, prot, carb, fat in BASE_TACO_EXPANDIDA:
             cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = ? AND LOWER(marca) = ?", (nome.lower(), marca.lower()))
             if not cursor.fetchone():
@@ -341,8 +367,16 @@ def obter_dados_usuario(data: str = Query(...), authorization: Optional[str] = H
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        cursor.execute("SELECT kcal, prot, carb, fat, agua FROM metas_usuario WHERE user_id = ?", (user_id,))
-        metas = dict(cursor.fetchone() or {"kcal": 2200, "prot": 160, "carb": 250, "fat": 60, "agua": 2500})
+        cursor.execute("""
+            SELECT kcal, prot, carb, fat, agua, genero, idade, peso, altura, atividade, objetivo 
+            FROM metas_usuario 
+            WHERE user_id = ?
+        """, (user_id,))
+        metas_row = cursor.fetchone()
+        metas = dict(metas_row) if metas_row else {
+            "kcal": 2200, "prot": 160.0, "carb": 250.0, "fat": 60.0, "agua": 2500,
+            "genero": "m", "idade": 30.0, "peso": 75.0, "altura": 175.0, "atividade": 1.55, "objetivo": 0.0
+        }
 
         cursor.execute("SELECT quantidade FROM consumo_agua WHERE user_id = ? AND data = ?", (user_id, data))
         row_agua = cursor.fetchone()
@@ -383,11 +417,13 @@ def salvar_metas(m: MetasModel, authorization: Optional[str] = Header(None)):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO metas_usuario (user_id, kcal, prot, carb, fat, agua) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO metas_usuario (user_id, kcal, prot, carb, fat, agua, genero, idade, peso, altura, atividade, objetivo) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET 
-            kcal=excluded.kcal, prot=excluded.prot, carb=excluded.carb, fat=excluded.fat, agua=excluded.agua
-        """, (user_id, m.kcal, m.prot, m.carb, m.fat, m.agua))
+            kcal=excluded.kcal, prot=excluded.prot, carb=excluded.carb, fat=excluded.fat, agua=excluded.agua,
+            genero=excluded.genero, idade=excluded.idade, peso=excluded.peso, altura=excluded.altura,
+            atividade=excluded.atividade, objetivo=excluded.objetivo
+        """, (user_id, m.kcal, m.prot, m.carb, m.fat, m.agua, m.genero, m.idade, m.peso, m.altura, m.atividade, m.objetivo))
         conn.commit()
     return {"status": "ok"}
 
@@ -537,7 +573,7 @@ async def buscar_alimentos(q: str = Query(..., min_length=2)):
                                     "fonte": "FATSECRET"
                                 })
         except Exception as e:
-            print(f"Erro FatSecret: {e}")
+            print(f"Erro na busca FatSecret: {e}")
 
     nomes_vistos = set()
     resultado_final = []
