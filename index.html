@@ -528,7 +528,7 @@
       if (configApp.backendUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const timeoutId = setTimeout(() => controller.abort(), 9000);
 
           const url = `${configApp.backendUrl}/api/alimentos?q=${encodeURIComponent(termo)}`;
           const response = await fetch(url, { signal: controller.signal });
