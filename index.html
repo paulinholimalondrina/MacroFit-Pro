@@ -79,7 +79,6 @@
 
     <!-- Resumo de Metas e Dashboard -->
     <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <!-- Card Calorias -->
       <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 relative overflow-hidden shadow-sm">
         <div class="flex justify-between items-start mb-2">
           <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Energia / Calorias</span>
@@ -95,7 +94,6 @@
         <p id="saldo-kcal" class="mt-2 text-xs text-slate-400 font-medium">Restam 2200 kcal</p>
       </div>
 
-      <!-- Card Proteína -->
       <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
         <div class="flex justify-between items-start mb-2">
           <span class="text-xs uppercase font-bold tracking-wider text-rose-400">Proteínas</span>
@@ -110,7 +108,6 @@
         </div>
       </div>
 
-      <!-- Card Carboidrato -->
       <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
         <div class="flex justify-between items-start mb-2">
           <span class="text-xs uppercase font-bold tracking-wider text-amber-400">Carboidratos</span>
@@ -125,7 +122,6 @@
         </div>
       </div>
 
-      <!-- Card Gordura -->
       <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-sm">
         <div class="flex justify-between items-start mb-2">
           <span class="text-xs uppercase font-bold tracking-wider text-sky-400">Gorduras</span>
@@ -141,7 +137,7 @@
       </div>
     </section>
 
-    <!-- Cabeçalho das Refeições & Botão de Nova Categoria -->
+    <!-- Diário de Refeições -->
     <div class="flex items-center justify-between pt-2">
       <h2 class="text-base font-bold text-slate-200 flex items-center gap-2">
         <i class="fa-solid fa-utensils text-emerald-400"></i> Diário de Refeições
@@ -151,14 +147,11 @@
       </button>
     </div>
 
-    <!-- Container Dinâmico de Categorias de Refeição -->
-    <div id="container-refeicoes" class="space-y-4">
-      <!-- Injetado via Javascript -->
-    </div>
+    <div id="container-refeicoes" class="space-y-4"></div>
 
   </main>
 
-  <!-- MODAL: Configurar URL do Backend / Proxy -->
+  <!-- MODAL: Configurar URL do Backend -->
   <div id="modal-config" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative">
       <div class="flex justify-between items-center mb-4">
@@ -171,34 +164,18 @@
 
       <div class="space-y-4 text-xs text-slate-300">
         <p class="leading-relaxed">
-          Defina como o app buscará alimentos. Se o servidor estiver ativo (seja no celular via <strong class="text-slate-100">Termux</strong> ou na <strong class="text-slate-100">nuvem</strong>), ele terá acesso a milhares de produtos com cache rápido. Caso o servidor não responda, a calculadora usa a base <strong class="text-emerald-400">TACO Offline</strong> instantaneamente.
+          Defina o link do seu servidor. Se a API estiver ativa no Render ou Termux, você terá busca rápida de marcas nacionais e produtos com cache.
         </p>
 
         <div>
           <label class="block text-slate-400 font-medium mb-1">URL Base do Servidor API:</label>
           <div class="flex gap-2">
-            <input type="text" id="cfg-backend-url" placeholder="http://localhost:8000" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
+            <input type="text" id="cfg-backend-url" placeholder="https://seu-app.onrender.com" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
             <button onclick="testarConexaoBackend()" id="btn-testar-conexao" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-semibold transition border border-slate-700 flex items-center gap-2">
               <i class="fa-solid fa-plug"></i> Testar
             </button>
           </div>
           <span id="teste-resultado" class="text-[11px] block mt-1.5 font-medium text-slate-400">Aguardando teste...</span>
-        </div>
-
-        <!-- Atalhos Prontos -->
-        <div>
-          <span class="block text-slate-400 mb-1.5 font-medium">Predefinições rápidas:</span>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="definirPresetUrl('http://localhost:8000')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
-              <i class="fa-brands fa-android text-emerald-400 mr-1"></i> Termux / Local (8000)
-            </button>
-            <button onclick="definirPresetUrl('http://127.0.0.1:8000')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
-              127.0.0.1:8000
-            </button>
-            <button onclick="definirPresetUrl('')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
-              Desativar (Apenas TACO)
-            </button>
-          </div>
         </div>
 
         <div class="pt-4 border-t border-slate-800 flex justify-end gap-2">
@@ -224,7 +201,7 @@
 
       <!-- Barra de Pesquisa -->
       <div class="relative mb-3">
-        <input type="text" id="busca-alimento-input" oninput="dispararBuscaComDebounce(this.value)" placeholder="Digite o produto (ex: Nescau, Frango, Banana, Whey)..." class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-9 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+        <input type="text" id="busca-alimento-input" oninput="dispararBuscaComDebounce(this.value)" placeholder="Digite o produto (ex: Leite, Whey, Arroz, Vigor)..." class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-9 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
         <i class="fa-solid fa-search absolute left-3 top-3.5 text-slate-500 text-xs"></i>
         <span id="busca-spinner" class="absolute right-3 top-3 hidden"><i class="fa-solid fa-circle-notch fa-spin text-emerald-400 text-sm"></i></span>
       </div>
@@ -236,8 +213,15 @@
       </div>
 
       <!-- Lista de Resultados de Busca -->
-      <div id="lista-resultados" class="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar max-h-48 border border-slate-800 rounded-xl p-2 bg-slate-950/40 mb-3">
+      <div id="lista-resultados" class="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar max-h-44 border border-slate-800 rounded-xl p-2 bg-slate-950/40 mb-3">
         <div class="text-center py-6 text-slate-500 text-xs">Nenhum alimento selecionado.</div>
+      </div>
+
+      <!-- Botão para Cadastrar Manualmente se não encontrar -->
+      <div class="mb-3">
+        <button onclick="abrirModalCadastroManual()" class="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 text-xs font-semibold transition border border-dashed border-slate-700 flex items-center justify-center gap-2">
+          <i class="fa-solid fa-plus-circle text-emerald-400"></i> Não encontrou? Cadastrar Alimento Manualmente
+        </button>
       </div>
 
       <!-- Painel do Alimento Selecionado & Conversor de Medidas -->
@@ -251,7 +235,6 @@
             <span id="sel-badge-fonte" class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300"></span>
           </div>
 
-          <!-- Controle de Quantidade e Unidade -->
           <div class="grid grid-cols-2 gap-2 mt-3">
             <div>
               <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Quantidade</label>
@@ -270,7 +253,6 @@
             </div>
           </div>
 
-          <!-- Live Preview dos Macros Calculados -->
           <div class="grid grid-cols-4 gap-1.5 mt-3 text-center bg-slate-950/70 p-2 rounded-lg border border-slate-800 text-xs">
             <div>
               <span class="block text-[10px] text-slate-400 font-medium">Calorias</span>
@@ -299,13 +281,66 @@
     </div>
   </div>
 
+  <!-- MODAL: Cadastrar Alimento Manualmente -->
+  <div id="modal-cadastro-manual" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold text-slate-100 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-pen-to-square text-emerald-400"></i> Cadastrar Alimento Manual
+        </h3>
+        <button onclick="fecharModalCadastroManual()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="text-slate-400 block mb-1">Nome do Alimento *</label>
+          <input type="text" id="man-nome" placeholder="Ex: Barra de Proteína Crisp" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-medium outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <div>
+          <label class="text-slate-400 block mb-1">Marca / Fabricante (opcional)</label>
+          <input type="text" id="man-marca" placeholder="Ex: IntegralMedica, Caseiro..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <p class="text-[11px] text-emerald-400/90 font-semibold pt-1">Insira os valores nutricionais por 100g (ou 100ml):</p>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-slate-400 block mb-1">Calorias (kcal) *</label>
+            <input type="number" id="man-kcal" step="any" placeholder="0" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="text-slate-400 block mb-1">Proteínas (g) *</label>
+            <input type="number" id="man-prot" step="any" placeholder="0" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-slate-400 block mb-1">Carboidratos (g) *</label>
+            <input type="number" id="man-carb" step="any" placeholder="0" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="text-slate-400 block mb-1">Gorduras Totais (g) *</label>
+            <input type="number" id="man-fat" step="any" placeholder="0" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-800 flex justify-end gap-2">
+          <button onclick="fecharModalCadastroManual()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold">Cancelar</button>
+          <button onclick="salvarAlimentoManual()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition">Salvar & Selecionar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Nova Categoria Customizada -->
   <div id="modal-categoria" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl relative">
       <h3 class="font-bold text-slate-100 text-sm mb-3 flex items-center gap-2">
         <i class="fa-solid fa-folder-plus text-emerald-400"></i> Nova Categoria de Refeição
       </h3>
-      <input type="text" id="novo-nome-categoria" placeholder="Ex: Pré-Treino, Ceia, Lanche da Noite..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 mb-4">
+      <input type="text" id="novo-nome-categoria" placeholder="Ex: Pré-Treino, Ceia..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 mb-4">
       <div class="flex justify-end gap-2 text-xs">
         <button onclick="fecharModalNovaCategoria()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300">Cancelar</button>
         <button onclick="salvarNovaCategoria()" class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold">Criar</button>
@@ -378,7 +413,7 @@
 
   <script>
     /* ==========================================================================
-       1. BASE TACO OFFLINE COMPLETA DE CONTINGÊNCIA (FALLBACK)
+       1. BASE TACO OFFLINE COMPLETA DE CONTINGÊNCIA
        ========================================================================== */
     const BASE_TACO_OFFLINE = [
       { nome: "Nescau em Pó", marca: "Nestlé", calorias: 380, proteinas: 3.5, carboidratos: 85.0, gorduras: 2.8, fonte: "TACO/Popular" },
@@ -409,28 +444,21 @@
     let categoriaAlvo = null;
     let itemSelecionadoTemp = null;
 
-    // Configurações do Backend / Proxy
     let configApp = {
-      backendUrl: localStorage.getItem('macrofit_backend_url') || 'http://localhost:8000',
-      ultimoStatusApi: 'offline' // 'online' ou 'offline'
+      backendUrl: localStorage.getItem('macrofit_backend_url') || '',
+      ultimoStatusApi: 'offline'
     };
 
-    // Metas Padrão
     let metas = JSON.parse(localStorage.getItem('macrofit_metas')) || {
-      kcal: 2200,
-      prot: 160,
-      carb: 250,
-      fat: 60,
-      agua: 2500
+      kcal: 2200, prot: 160, carb: 250, fat: 60, agua: 2500
     };
 
-    // Categorias Padrão
     let categorias = JSON.parse(localStorage.getItem('macrofit_categorias')) || [
-      "Café da Manhã",
-      "Almoço",
-      "Lanche da Tarde",
-      "Jantar"
+      "Café da Manhã", "Almoço", "Lanche da Tarde", "Jantar"
     ];
+
+    // Alimentos manuais salvos localmente no navegador
+    let alimentosManuaisLocais = JSON.parse(localStorage.getItem('macrofit_alimentos_manuais')) || [];
 
     /* ==========================================================================
        3. INICIALIZAÇÃO
@@ -441,22 +469,35 @@
       atualizarMetasNaInterface();
       renderizarEstruturaRefeicoes();
       carregarDia();
-      testarConexaoBackend(false); // checagem silenciosa na inicialização
+      if (configApp.backendUrl) {
+        testarConexaoBackend(false);
+      } else {
+        atualizarBadgeStatus('offline');
+      }
     });
 
     /* ==========================================================================
-       4. CONEXÃO COM O BACKEND & TESTE DE STATUS
+       4. CONEXÃO COM O BACKEND & STATUS
        ========================================================================== */
+    function atualizarBadgeStatus(status) {
+      const dot = document.getElementById('status-indicator-dot');
+      const badgeText = document.getElementById('status-badge-text');
+      if (status === 'online') {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400";
+        badgeText.textContent = "API Conectada";
+      } else {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500";
+        badgeText.textContent = "TACO / Offline";
+      }
+    }
+
     async function testarConexaoBackend(feedbackVisual = true) {
       const urlInput = document.getElementById('cfg-backend-url').value.trim().replace(/\/+$/, '');
       const resultadoSpan = document.getElementById('teste-resultado');
-      const dot = document.getElementById('status-indicator-dot');
-      const badgeText = document.getElementById('status-badge-text');
 
       if (!urlInput) {
         configApp.ultimoStatusApi = 'offline';
-        dot.className = "w-2.5 h-2.5 rounded-full bg-slate-500";
-        badgeText.textContent = "TACO Offline";
+        atualizarBadgeStatus('offline');
         if (feedbackVisual) resultadoSpan.innerHTML = "<span class='text-amber-400'>Modo offline ativado (usando TACO local).</span>";
         return;
       }
@@ -465,23 +506,21 @@
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-        const resp = await fetch(`${urlInput}/api/alimentos?q=teste`, { signal: controller.signal });
+        const resp = await fetch(`${urlInput}/api/alimentos?q=arroz`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         if (resp.ok) {
           configApp.ultimoStatusApi = 'online';
-          dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400";
-          badgeText.textContent = "API Conectada";
-          if (feedbackVisual) resultadoSpan.innerHTML = "<span class='text-emerald-400 font-semibold'><i class='fa-solid fa-check'></i> Conectado com sucesso! Cache e API ativos.</span>";
+          atualizarBadgeStatus('online');
+          if (feedbackVisual) resultadoSpan.innerHTML = "<span class='text-emerald-400 font-semibold'><i class='fa-solid fa-check'></i> Conectado com sucesso! Servidor ativo.</span>";
         } else {
-          throw new Error('Servidor respondeu com código de erro');
+          throw new Error('Erro na resposta');
         }
       } catch (err) {
         configApp.ultimoStatusApi = 'offline';
-        dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500";
-        badgeText.textContent = "Fallback TACO";
+        atualizarBadgeStatus('offline');
         if (feedbackVisual) resultadoSpan.innerHTML = "<span class='text-rose-400 font-semibold'><i class='fa-solid fa-triangle-exclamation'></i> Servidor inacessível. O app continuará com a base TACO.</span>";
       }
     }
@@ -494,13 +533,13 @@
       fecharModalConfig();
     }
 
-    function definirPresetUrl(url) {
-      document.getElementById('cfg-backend-url').value = url;
+    /* ==========================================================================
+       5. BUSCA DE ALIMENTOS
+       ========================================================================== */
+    function normalizarTexto(txt) {
+      return (txt || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
     }
 
-    /* ==========================================================================
-       5. SISTEMA DE BUSCA HÍBRIDO COM FALLBACK AUTOMÁTICO
-       ========================================================================== */
     function dispararBuscaComDebounce(termo) {
       clearTimeout(debounceTimer);
       const spinner = document.getElementById('busca-spinner');
@@ -514,7 +553,7 @@
       spinner.classList.remove('hidden');
       debounceTimer = setTimeout(() => {
         executarBuscaAlimentos(termo.trim());
-      }, 350); // debounce de 350ms
+      }, 350);
     }
 
     async function executarBuscaAlimentos(termo) {
@@ -524,11 +563,19 @@
       let itensRetornados = [];
       let fonteUsada = "";
 
-      // 1. Tenta buscar no Backend configurado se houver URL definida
+      const termoNorm = normalizarTexto(termo);
+
+      // 1. Procura primeiro nos alimentos manuais locais
+      const manuaisEncontrados = alimentosManuaisLocais.filter(item => 
+        normalizarTexto(item.nome).includes(termoNorm) || 
+        normalizarTexto(item.marca).includes(termoNorm)
+      );
+
+      // 2. Busca no Backend se configurado
       if (configApp.backendUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 9000);
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
 
           const url = `${configApp.backendUrl}/api/alimentos?q=${encodeURIComponent(termo)}`;
           const response = await fetch(url, { signal: controller.signal });
@@ -538,41 +585,48 @@
             const data = await response.json();
             if (data.itens && data.itens.length > 0) {
               itensRetornados = data.itens;
-              fonteUsada = data.origem === 'local_cache' ? 'Servidor (Cache SQLite)' : 'Servidor (Híbrido/OFF)';
+              fonteUsada = data.origem === 'taco_local' ? 'Servidor (Base TACO)' : 'Servidor (FatSecret/Cache)';
               tagStatus.className = "px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold";
               tagStatus.textContent = "Servidor Online";
             }
           }
         } catch (e) {
-          console.warn("Backend offline ou falhou, ativando fallback TACO...", e);
+          console.warn("Backend falhou, acionando contingência TACO...", e);
         }
       }
 
-      // 2. Se o backend falhou ou retornou vazio, ativa Fallback na Base TACO
+      // 3. Fallback na Base TACO offline se o servidor não devolveu resultados
       if (itensRetornados.length === 0) {
         fonteUsada = "TACO Offline (Local)";
-        const tLower = termo.toLowerCase();
         itensRetornados = BASE_TACO_OFFLINE.filter(item => 
-          item.nome.toLowerCase().includes(tLower) || 
-          item.marca.toLowerCase().includes(tLower)
+          normalizarTexto(item.nome).includes(termoNorm) || 
+          normalizarTexto(item.marca).includes(termoNorm)
         );
         tagStatus.className = "px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-semibold";
         tagStatus.textContent = "Fallback TACO";
       }
 
+      // Junta manuais locais no topo da lista
+      const listaFinal = [...manuaisEncontrados, ...itensRetornados];
+
       spinner.classList.add('hidden');
-      infoOrigem.textContent = `${itensRetornados.length} itens encontrados via ${fonteUsada}`;
-      renderizarResultadosBusca(itensRetornados);
+      infoOrigem.textContent = `${listaFinal.length} itens encontrados via ${fonteUsada}`;
+      renderizarResultadosBusca(listaFinal);
     }
 
     function renderizarResultadosBusca(lista) {
       const container = document.getElementById('lista-resultados');
       if (lista.length === 0) {
-        container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Nenhum resultado encontrado para o termo.</div>`;
+        container.innerHTML = `
+          <div class="text-center py-6 text-slate-500 text-xs">
+            Nenhum resultado encontrado.<br>
+            <span class="text-emerald-400 font-medium">Use o botão abaixo para cadastrá-lo manualmente!</span>
+          </div>
+        `;
         return;
       }
 
-      container.innerHTML = lista.map((item, idx) => `
+      container.innerHTML = lista.map(item => `
         <div onclick='selecionarItemBusca(${JSON.stringify(item)})' class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition flex items-center justify-between group">
           <div>
             <h4 class="text-xs font-bold text-slate-200 group-hover:text-emerald-400 transition">${item.nome}</h4>
@@ -602,7 +656,6 @@
       if (!itemSelecionadoTemp) return;
       const qtd = parseFloat(document.getElementById('sel-qtd-input').value) || 0;
       const multiplicadorUnidade = parseFloat(document.getElementById('sel-unidade-select').value) || 1;
-      const pesoFinalGramas = qtd * (multiplicadorUnidade === 1 ? 1 : multiplicadorUnidade / 100);
       const fator = (multiplicadorUnidade === 1 ? qtd : (qtd * multiplicadorUnidade)) / 100;
 
       const kcal = (itemSelecionadoTemp.calorias * fator).toFixed(0);
@@ -644,7 +697,71 @@
     }
 
     /* ==========================================================================
-       6. GERENCIAMENTO DE CATEGORIAS E REFEIÇÕES
+       6. CADASTRO MANUAL DE ALIMENTO
+       ========================================================================== */
+    function abrirModalCadastroManual() {
+      const termoAtual = document.getElementById('busca-alimento-input').value.trim();
+      document.getElementById('man-nome').value = termoAtual || '';
+      document.getElementById('man-marca').value = '';
+      document.getElementById('man-kcal').value = '';
+      document.getElementById('man-prot').value = '';
+      document.getElementById('man-carb').value = '';
+      document.getElementById('man-fat').value = '';
+
+      document.getElementById('modal-cadastro-manual').classList.remove('hidden');
+    }
+
+    function fecharModalCadastroManual() {
+      document.getElementById('modal-cadastro-manual').classList.add('hidden');
+    }
+
+    async function salvarAlimentoManual() {
+      const nome = document.getElementById('man-nome').value.trim();
+      const marca = document.getElementById('man-marca').value.trim() || 'Manual';
+      const kcal = parseFloat(document.getElementById('man-kcal').value) || 0;
+      const prot = parseFloat(document.getElementById('man-prot').value) || 0;
+      const carb = parseFloat(document.getElementById('man-carb').value) || 0;
+      const fat = parseFloat(document.getElementById('man-fat').value) || 0;
+
+      if (!nome) {
+        alert("Por favor, digite o nome do alimento.");
+        return;
+      }
+
+      const novoAlimento = {
+        nome,
+        marca,
+        calorias: kcal,
+        proteinas: prot,
+        carboidratos: carb,
+        gorduras: fat,
+        fonte: "MANUAL"
+      };
+
+      // 1. Salva no LocalStorage do navegador
+      alimentosManuaisLocais.unshift(novoAlimento);
+      localStorage.setItem('macrofit_alimentos_manuais', JSON.stringify(alimentosManuaisLocais));
+
+      // 2. Se o backend estiver configurado, envia para o servidor salvar no SQLite
+      if (configApp.backendUrl) {
+        try {
+          fetch(`${configApp.backendUrl}/api/alimentos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(novoAlimento)
+          }).catch(e => console.warn("Aviso ao salvar no servidor:", e));
+        } catch (e) {
+          console.warn("Não foi possível enviar ao servidor:", e);
+        }
+      }
+
+      fecharModalCadastroManual();
+      // Já seleciona o alimento cadastrado para adicionar na refeição imediatamente
+      selecionarItemBusca(novoAlimento);
+    }
+
+    /* ==========================================================================
+       7. DIÁRIO DE REFEIÇÕES & TOTAIS
        ========================================================================== */
     function renderizarEstruturaRefeicoes() {
       const container = document.getElementById('container-refeicoes');
@@ -712,9 +829,6 @@
       }
     }
 
-    /* ==========================================================================
-       7. CÁLCULO DE TOTAIS E RENDERIZAÇÃO DO DIÁRIO
-       ========================================================================== */
     function obterDadosDiario(data) {
       return JSON.parse(localStorage.getItem(`macrofit_diario_${data}`)) || {};
     }
@@ -768,13 +882,11 @@
         if (subtotalBadge) subtotalBadge.textContent = `${Math.round(subKcal)} kcal`;
       });
 
-      // Atualiza Totais nos Cards
       document.getElementById('total-kcal').textContent = Math.round(totalKcal);
       document.getElementById('total-prot').textContent = totalProt.toFixed(1);
       document.getElementById('total-carb').textContent = totalCarb.toFixed(1);
       document.getElementById('total-fat').textContent = totalFat.toFixed(1);
 
-      // Barras de Progresso
       const pctKcal = Math.min(100, (totalKcal / metas.kcal) * 100);
       const pctProt = Math.min(100, (totalProt / metas.prot) * 100);
       const pctCarb = Math.min(100, (totalCarb / metas.carb) * 100);
@@ -795,14 +907,13 @@
         saldoEl.className = "mt-2 text-xs text-rose-400 font-bold";
       }
 
-      // Água do Dia
       const aguaConsumida = parseFloat(localStorage.getItem(`macrofit_agua_${dataAtual}`)) || 0;
       document.getElementById('agua-atual').textContent = aguaConsumida;
     }
 
     /* ==========================================================================
-       8. CONTROLE DE DATA & ÁGUA
-       ========================================================================= */
+       8. DATA & ÁGUA
+       ========================================================================== */
     function alterarDia(delta) {
       const dt = new Date(dataAtual + "T00:00:00");
       dt.setDate(dt.getDate() + delta);
@@ -841,7 +952,7 @@
     }
 
     /* ==========================================================================
-       9. PERFIL & CÁLCULOS METABÓLICOS (MIFFLIN-ST JEOR)
+       9. PERFIL & METAS (MIFFLIN-ST JEOR)
        ========================================================================== */
     function salvarPerfilMetabolico() {
       const gen = document.getElementById('prof-genero').value;
@@ -851,14 +962,12 @@
       const fatorAtiv = parseFloat(document.getElementById('prof-atividade').value) || 1.55;
       const ajusteObjetivo = parseFloat(document.getElementById('prof-objetivo').value) || 0;
 
-      // Equação Mifflin-St Jeor
       let tmb = (10 * peso) + (6.25 * altura) - (5 * idade);
       tmb += (gen === 'm' ? 5 : -161);
 
       const get = tmb * fatorAtiv;
       const caloriasFinais = Math.round(get + ajusteObjetivo);
 
-      // Distribuição clássica: Proteína 2g/kg, Gordura 0.8g/kg, Restante em Carboidratos
       const prot = Math.round(peso * 2.0);
       const fat = Math.round(peso * 0.8);
       const caloriasRestantes = caloriasFinais - (prot * 4) - (fat * 9);
