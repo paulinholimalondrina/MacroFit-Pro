@@ -17,10 +17,9 @@ app.add_middleware(
 DB_PATH = "alimentos_cache.db"
 
 def remover_acentos(texto: str) -> str:
-    """Remove acentos, cedilhas e caracteres especiais para busca insensível."""
     if not texto:
         return ""
-    nfkd = unicodedata.normalize('NFKD', texto)
+    nfkd = unicodedata.normalize('NFKD', str(texto))
     return "".join([c for c in nfkd if not unicodedata.combining(c)]).lower().strip()
 
 def init_db():
@@ -30,9 +29,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS alimentos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nome TEXT NOT NULL,
-                nome_limpo TEXT NOT NULL,
                 marca TEXT,
-                marca_limpa TEXT,
                 calorias REAL DEFAULT 0,
                 proteinas REAL DEFAULT 0,
                 carboidratos REAL DEFAULT 0,
@@ -40,50 +37,46 @@ def init_db():
                 fonte TEXT DEFAULT 'CACHE'
             )
         """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_nome_limpo ON alimentos(nome_limpo);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_marca_limpa ON alimentos(marca_limpa);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_nome ON alimentos(nome);")
         conn.commit()
 
 init_db()
 
 @app.get("/")
 def home():
-    return {"status": "ok", "mensagem": "MacroFit API Brasil ativa e sem diferenciação de acento"}
+    return {"status": "ok", "mensagem": "MacroFit API Brasil ativa"}
 
 @app.get("/api/alimentos")
 async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome do produto ou marca")):
-    # Normaliza a busca do usuário (remove acentos e põe em minúsculas)
     termo_limpo = remover_acentos(q)
-    palavras = termo_limpo.split()
+    palavras_busca = termo_limpo.split()
     resultados_cache = []
 
-    # 1. Procura no banco local SQLite comparando campos sem acento
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+    # 1. Procura no banco SQLite local tratando acentos em memória
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT nome, marca, calorias, proteinas, carboidratos, gorduras, fonte FROM alimentos LIMIT 300")
+            todos_locais = cursor.fetchall()
+            
+            for r in todos_locais:
+                n_limpo = remover_acentos(r["nome"])
+                m_limpo = remover_acentos(r["marca"] or "")
+                
+                # Confere se todas as palavras digitadas batem no nome ou na marca
+                if all(p in n_limpo or p in m_limpo for p in palavras_busca):
+                    resultados_cache.append(dict(r))
+    except Exception as e:
+        print(f"Aviso no banco local: {e}")
 
-        filtros = " AND ".join(["(nome_limpo LIKE ? OR marca_limpa LIKE ?)"] * len(palavras))
-        parametros = []
-        for p in palavras:
-            parametros.extend([f"%{p}%", f"%{p}%"])
-
-        cursor.execute(f"""
-            SELECT nome, marca, calorias, proteinas, carboidratos, gorduras, fonte 
-            FROM alimentos 
-            WHERE {filtros}
-            LIMIT 50
-        """, parametros)
-
-        for r in cursor.fetchall():
-            resultados_cache.append(dict(r))
-
-    # Se já encontrou um catálogo satisfatório no cache, entrega de imediato
-    if len(resultados_cache) >= 12:
+    # Se já tiver um volume bom no cache local, retorna direto
+    if len(resultados_cache) >= 10:
         return {"origem": "local_cache", "total": len(resultados_cache), "itens": resultados_cache}
 
-    # 2. Busca na API do Open Food Facts focada no mercado brasileiro
+    # 2. Busca externa na API do Open Food Facts
     headers = {
-        "User-Agent": "MacroFitProApp/2.0 (contato@macrofit.com.br)"
+        "User-Agent": "MacroFitProApp/3.0 (contato@macrofit.com.br)"
     }
 
     url = (
@@ -92,7 +85,6 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
         f"&search_simple=1"
         f"&action=process"
         f"&json=1"
-        f"&tagtype_0=countries&tag_contains_0=contains&tag_0=brazil"
         f"&page_size=60"
         f"&fields=product_name,product_name_pt,brands,countries_tags,nutriments"
     )
@@ -112,9 +104,10 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
                         if not nome or len(nome.strip()) < 2:
                             continue
 
-                        paises = p.get("countries_tags", [])
-                        eh_do_brasil = any("brazil" in str(c).lower() or "brasil" in str(c).lower() for c in paises)
-                        if not eh_do_brasil and not p.get("product_name_pt"):
+                        # Filtra apenas itens comercializados no Brasil ou com nome em PT
+                        paises = [str(c).lower() for c in p.get("countries_tags", [])]
+                        eh_brasil = any("brazil" in c or "brasil" in c for c in paises)
+                        if not eh_brasil and not p.get("product_name_pt"):
                             continue
 
                         marca = p.get("brands") or "Genérico"
@@ -132,15 +125,12 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
                         if kcal == 0 and prot == 0 and carb == 0 and fat == 0 and "agua" not in remover_acentos(nome):
                             continue
 
-                        nome_limpo = remover_acentos(nome)
-                        marca_limpa = remover_acentos(marca)
-
-                        cursor.execute("SELECT id FROM alimentos WHERE nome_limpo = ? AND marca_limpa = ?", (nome_limpo, marca_limpa))
+                        cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = ? AND LOWER(marca) = ?", (nome.strip().lower(), marca.strip().lower()))
                         if not cursor.fetchone():
                             cursor.execute("""
-                                INSERT INTO alimentos (nome, nome_limpo, marca, marca_limpa, calorias, proteinas, carboidratos, gorduras, fonte)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BRASIL')
-                            """, (nome.strip(), nome_limpo, marca.strip(), marca_limpa, round(kcal, 1), round(prot, 1), round(carb, 1), round(fat, 1)))
+                                INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
+                                VALUES (?, ?, ?, ?, ?, ?, 'BRASIL')
+                            """, (nome.strip(), marca.strip(), round(kcal, 1), round(prot, 1), round(carb, 1), round(fat, 1)))
                             conn.commit()
 
                         novos_itens.append({
@@ -153,9 +143,9 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
                             "fonte": "BRASIL"
                         })
     except Exception as e:
-        print(f"Aviso na busca externa: {e}")
+        print(f"Erro na busca externa: {e}")
 
-    # Mescla resultados locais e novos sem duplicados
+    # Mescla resultados locais e novos sem itens duplicados
     nomes_vistos = set()
     lista_final = []
     for item in resultados_cache + novos_itens:
@@ -164,4 +154,4 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
             nomes_vistos.add(chave)
             lista_final.append(item)
 
-    return {"origem": "busca_sem_acento", "total": len(lista_final), "itens": lista_final}
+    return {"origem": "busca_ok", "total": len(lista_final), "itens": lista_final}
