@@ -1,4 +1,3 @@
-import sqlite3
 import unicodedata
 import os
 import time
@@ -8,8 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import httpx
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-app = FastAPI(title="MacroFit Multi-User API")
+app = FastAPI(title="MacroFit Multi-User API (PostgreSQL)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,11 +20,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = "alimentos_cache.db"
+# ==============================================================================
+# CONEXÃO POSTGRESQL (NEON)
+# ==============================================================================
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    "postgresql://neondb_owner:npg_TZ8J1HvGzWSd@ep-crimson-base-b5sz5ns2.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+)
 
-# ==============================================================================
-# CONFIGURAÇÕES E CHAVES
-# ==============================================================================
 CHAVE_MESTRA_RECUPERACAO = os.getenv("MACROFIT_RESET_KEY", "macrofit2026")
 FATSECRET_CLIENT_ID = os.getenv("FATSECRET_CLIENT_ID", "fe6063cade4b4ca3ba6487f3d521c556")
 FATSECRET_CLIENT_SECRET = os.getenv("FATSECRET_CLIENT_SECRET", "a4833d40ca15452392896fb1efa1bc64")
@@ -88,6 +92,9 @@ def remover_acentos(texto: str) -> str:
         return ""
     nfkd = unicodedata.normalize('NFKD', str(texto))
     return "".join([c for c in nfkd if not unicodedata.combining(c)]).lower().strip()
+
+def get_db():
+    return psycopg2.connect(DATABASE_URL)
 
 # ==============================================================================
 # BASE DE ALIMENTOS COMPLETA (TACO & MARCAS POPULARES)
@@ -162,139 +169,108 @@ BASE_TACO_EXPANDIDA = [
     ("Requeijão Light", "Vigor", 170.0, 11.0, 3.5, 12.0),
     ("Queijo Minas Frescal", "Laticínios / TACO", 264.0, 17.4, 3.2, 20.2),
     ("Queijo Mussarela Fatiado", "Laticínios / TACO", 330.0, 22.0, 2.0, 26.0),
-    ("Queijo Prato Fatiado", "Laticínios / TACO", 360.0, 23.0, 1.5, 29.0),
-    ("Queijo Cottage Tradicional", "Laticínios", 98.0, 11.0, 3.4, 4.3),
-    ("Iogurte Natural Desnatado", "Nestlé", 42.0, 4.5, 5.8, 0.3),
-    ("Iogurte Natural Integral", "Nestlé", 66.0, 3.8, 4.8, 3.6),
-    ("Leite em Pó Integral Ninho", "Nestlé", 497.0, 25.0, 39.0, 27.0),
-    ("Leite em Pó Desnatado Molico", "Nestlé", 350.0, 34.0, 52.0, 0.5),
-
-    # Suplementos
     ("100% Whey Concentrate", "Growth Supplements", 400.0, 80.0, 9.0, 5.0),
     ("100% Whey Isolate", "Growth Supplements", 365.0, 90.0, 2.0, 0.5),
     ("Creatina Creapure 100% Pura", "Growth Supplements", 0.0, 0.0, 0.0, 0.0),
-    ("Pasta de Amendoim Integral", "Growth Supplements", 588.0, 28.0, 18.0, 49.0),
+    ("Pasta de Amendoim Integral Torrado", "Growth Supplements", 588.0, 28.0, 18.0, 49.0),
     ("100% Pure Whey", "Probiótica", 405.0, 76.0, 10.0, 6.0),
     ("100% Whey Refil", "Max Titanium", 400.0, 75.0, 11.0, 5.5),
     ("100% Whey Gold Standard", "Optimum Nutrition", 398.0, 78.0, 8.0, 4.0),
     ("Nescau 2.0 Achocolatado em Pó", "Nestlé", 380.0, 3.5, 85.0, 2.8),
-    ("Toddy Original Achocolatado", "PepsiCo", 400.0, 2.0, 90.0, 2.5),
     ("Azeite de Oliva Extra Virgem", "Gorduras / TACO", 884.0, 0.0, 0.0, 100.0)
 ]
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                senha_hash TEXT NOT NULL,
-                token TEXT UNIQUE,
-                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) UNIQUE NOT NULL,
+                    senha_hash TEXT NOT NULL,
+                    token TEXT UNIQUE,
+                    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS metas_usuario (
-                user_id INTEGER PRIMARY KEY,
-                kcal INTEGER DEFAULT 2200,
-                prot REAL DEFAULT 160.0,
-                carb REAL DEFAULT 250.0,
-                fat REAL DEFAULT 60.0,
-                agua INTEGER DEFAULT 2500,
-                genero TEXT DEFAULT 'm',
-                idade REAL DEFAULT 30.0,
-                peso REAL DEFAULT 75.0,
-                altura REAL DEFAULT 175.0,
-                atividade REAL DEFAULT 1.55,
-                objetivo REAL DEFAULT 0.0,
-                FOREIGN KEY (user_id) REFERENCES usuarios(id)
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS metas_usuario (
+                    user_id INT PRIMARY KEY REFERENCES usuarios(id),
+                    kcal INT DEFAULT 2200,
+                    prot REAL DEFAULT 160.0,
+                    carb REAL DEFAULT 250.0,
+                    fat REAL DEFAULT 60.0,
+                    agua INT DEFAULT 2500,
+                    genero VARCHAR(10) DEFAULT 'm',
+                    idade REAL DEFAULT 30.0,
+                    peso REAL DEFAULT 75.0,
+                    altura REAL DEFAULT 175.0,
+                    atividade REAL DEFAULT 1.55,
+                    objetivo REAL DEFAULT 0.0
+                );
+            """)
 
-        # Migração transparente: adiciona as colunas novas sem recriar tabela nem apagar dados
-        cursor.execute("PRAGMA table_info(metas_usuario)")
-        colunas_existentes = [col[1] for col in cursor.fetchall()]
-        novas_colunas = [
-            ("genero", "TEXT DEFAULT 'm'"),
-            ("idade", "REAL DEFAULT 30.0"),
-            ("peso", "REAL DEFAULT 75.0"),
-            ("altura", "REAL DEFAULT 175.0"),
-            ("atividade", "REAL DEFAULT 1.55"),
-            ("objetivo", "REAL DEFAULT 0.0")
-        ]
-        for nome_col, tipo_col in novas_colunas:
-            if nome_col not in colunas_existentes:
-                cursor.execute(f"ALTER TABLE metas_usuario ADD COLUMN {nome_col} {tipo_col}")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS consumo_agua (
+                    id SERIAL PRIMARY KEY,
+                    user_id INT REFERENCES usuarios(id),
+                    data VARCHAR(15) NOT NULL,
+                    quantidade REAL DEFAULT 0,
+                    UNIQUE(user_id, data)
+                );
+            """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS consumo_agua (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                data TEXT NOT NULL,
-                quantidade REAL DEFAULT 0,
-                UNIQUE(user_id, data),
-                FOREIGN KEY (user_id) REFERENCES usuarios(id)
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS diario_refeicoes (
+                    id SERIAL PRIMARY KEY,
+                    user_id INT REFERENCES usuarios(id),
+                    data VARCHAR(15) NOT NULL,
+                    categoria VARCHAR(100) NOT NULL,
+                    nome TEXT NOT NULL,
+                    marca TEXT,
+                    quantidade REAL NOT NULL,
+                    unidade_desc TEXT,
+                    calorias REAL NOT NULL,
+                    proteinas REAL NOT NULL,
+                    carboidratos REAL NOT NULL,
+                    gorduras REAL NOT NULL
+                );
+            """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS diario_refeicoes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                data TEXT NOT NULL,
-                categoria TEXT NOT NULL,
-                nome TEXT NOT NULL,
-                marca TEXT,
-                quantidade REAL NOT NULL,
-                unidade_desc TEXT,
-                calorias REAL NOT NULL,
-                proteinas REAL NOT NULL,
-                carboidratos REAL NOT NULL,
-                gorduras REAL NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES usuarios(id)
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS alimentos (
+                    id SERIAL PRIMARY KEY,
+                    nome TEXT NOT NULL,
+                    marca TEXT,
+                    calorias REAL DEFAULT 0,
+                    proteinas REAL DEFAULT 0,
+                    carboidratos REAL DEFAULT 0,
+                    gorduras REAL DEFAULT 0,
+                    fonte VARCHAR(50) DEFAULT 'TACO'
+                );
+            """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS alimentos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT NOT NULL,
-                marca TEXT,
-                calorias REAL DEFAULT 0,
-                proteinas REAL DEFAULT 0,
-                carboidratos REAL DEFAULT 0,
-                gorduras REAL DEFAULT 0,
-                fonte TEXT DEFAULT 'TACO'
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_nome ON alimentos(nome);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_diario ON diario_refeicoes(user_id, data);")
-
-        for nome, marca, kcal, prot, carb, fat in BASE_TACO_EXPANDIDA:
-            cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = ? AND LOWER(marca) = ?", (nome.lower(), marca.lower()))
-            if not cursor.fetchone():
-                cursor.execute("""
-                    INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
-                    VALUES (?, ?, ?, ?, ?, ?, 'TACO_LOCAL')
-                """, (nome, marca, kcal, prot, carb, fat))
+            for nome, marca, kcal, prot, carb, fat in BASE_TACO_EXPANDIDA:
+                cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = %s AND LOWER(marca) = %s", (nome.lower(), marca.lower()))
+                if not cursor.fetchone():
+                    cursor.execute("""
+                        INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
+                        VALUES (%s, %s, %s, %s, %s, %s, 'TACO_LOCAL')
+                    """, (nome, marca, kcal, prot, carb, fat))
         conn.commit()
 
 init_db()
 
-# --- AUTENTICAÇÃO E RECUPERAÇÃO ---
 def obter_usuario_por_token(token: str) -> int:
     if not token:
         raise HTTPException(status_code=401, detail="Token não fornecido")
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM usuarios WHERE token = ?", (token,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=401, detail="Sessão inválida ou expirada")
-        return row[0]
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM usuarios WHERE token = %s", (token,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=401, detail="Sessão inválida ou expirada")
+            return row[0]
 
 @app.post("/api/auth/register")
 def register(auth: AuthRequest):
@@ -302,18 +278,17 @@ def register(auth: AuthRequest):
     if len(u) < 3 or len(auth.password) < 4:
         raise HTTPException(status_code=400, detail="Usuário deve ter min 3 letras e senha min 4 caracteres")
     
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM usuarios WHERE username = ?", (u,))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Este nome de usuário já existe.")
-        
-        token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
-        cursor.execute("INSERT INTO usuarios (username, senha_hash, token) VALUES (?, ?, ?)", 
-                       (u, hash_senha(auth.password), token))
-        user_id = cursor.lastrowid
-
-        cursor.execute("INSERT INTO metas_usuario (user_id) VALUES (?)", (user_id,))
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM usuarios WHERE username = %s", (u,))
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Este nome de usuário já existe.")
+            
+            token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
+            cursor.execute("INSERT INTO usuarios (username, senha_hash, token) VALUES (%s, %s, %s) RETURNING id", 
+                           (u, hash_senha(auth.password), token))
+            user_id = cursor.fetchone()[0]
+            cursor.execute("INSERT INTO metas_usuario (user_id) VALUES (%s)", (user_id,))
         conn.commit()
 
     return {"status": "ok", "token": token, "username": u}
@@ -322,15 +297,15 @@ def register(auth: AuthRequest):
 def login(auth: AuthRequest):
     u = auth.username.strip().lower()
     h = hash_senha(auth.password)
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM usuarios WHERE username = ? AND senha_hash = ?", (u, h))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=400, detail="Usuário ou senha incorretos")
-        
-        token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
-        cursor.execute("UPDATE usuarios SET token = ? WHERE id = ?", (token, row[0]))
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM usuarios WHERE username = %s AND senha_hash = %s", (u, h))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=400, detail="Usuário ou senha incorretos")
+            
+            token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
+            cursor.execute("UPDATE usuarios SET token = %s WHERE id = %s", (token, row[0]))
         conn.commit()
 
     return {"status": "ok", "token": token, "username": u}
@@ -344,66 +319,63 @@ def reset_password(req: ResetPasswordRequest):
     if len(req.nova_senha) < 4:
         raise HTTPException(status_code=400, detail="A nova senha deve ter no mínimo 4 caracteres.")
 
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM usuarios WHERE username = ?", (u,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-        
-        novo_hash = hash_senha(req.nova_senha)
-        token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
-        cursor.execute("UPDATE usuarios SET senha_hash = ?, token = ? WHERE id = ?", (novo_hash, token, row[0]))
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM usuarios WHERE username = %s", (u,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+            
+            novo_hash = hash_senha(req.nova_senha)
+            token = hashlib.sha256(f"{u}_{time.time()}".encode()).hexdigest()
+            cursor.execute("UPDATE usuarios SET senha_hash = %s, token = %s WHERE id = %s", (novo_hash, token, row[0]))
         conn.commit()
 
     return {"status": "ok", "token": token, "username": u, "mensagem": "Senha redefinida com sucesso!"}
 
-# --- METAS & CONSUMO DO USUÁRIO ---
 @app.get("/api/usuario/dados-completos")
 def obter_dados_usuario(data: str = Query(...), authorization: Optional[str] = Header(None)):
     user_id = obter_usuario_por_token(authorization)
     
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT kcal, prot, carb, fat, agua, genero, idade, peso, altura, atividade, objetivo 
+                FROM metas_usuario 
+                WHERE user_id = %s
+            """, (user_id,))
+            metas_row = cursor.fetchone()
+            metas = dict(metas_row) if metas_row else {
+                "kcal": 2200, "prot": 160.0, "carb": 250.0, "fat": 60.0, "agua": 2500,
+                "genero": "m", "idade": 30.0, "peso": 75.0, "altura": 175.0, "atividade": 1.55, "objetivo": 0.0
+            }
 
-        cursor.execute("""
-            SELECT kcal, prot, carb, fat, agua, genero, idade, peso, altura, atividade, objetivo 
-            FROM metas_usuario 
-            WHERE user_id = ?
-        """, (user_id,))
-        metas_row = cursor.fetchone()
-        metas = dict(metas_row) if metas_row else {
-            "kcal": 2200, "prot": 160.0, "carb": 250.0, "fat": 60.0, "agua": 2500,
-            "genero": "m", "idade": 30.0, "peso": 75.0, "altura": 175.0, "atividade": 1.55, "objetivo": 0.0
-        }
+            cursor.execute("SELECT quantidade FROM consumo_agua WHERE user_id = %s AND data = %s", (user_id, data))
+            row_agua = cursor.fetchone()
+            agua = row_agua["quantidade"] if row_agua else 0.0
 
-        cursor.execute("SELECT quantidade FROM consumo_agua WHERE user_id = ? AND data = ?", (user_id, data))
-        row_agua = cursor.fetchone()
-        agua = row_agua["quantidade"] if row_agua else 0.0
-
-        cursor.execute("""
-            SELECT id, categoria, nome, marca, quantidade, unidade_desc, calorias, proteinas, carboidratos, gorduras 
-            FROM diario_refeicoes 
-            WHERE user_id = ? AND data = ?
-        """, (user_id, data))
-        
-        diario = {}
-        for r in cursor.fetchall():
-            cat = r["categoria"]
-            if cat not in diario:
-                diario[cat] = []
-            diario[cat].append({
-                "id": r["id"],
-                "nome": r["nome"],
-                "marca": r["marca"],
-                "quantidade": r["quantidade"],
-                "unidadeDesc": r["unidade_desc"],
-                "calorias": r["calorias"],
-                "proteinas": r["proteinas"],
-                "carboidratos": r["carboidratos"],
-                "gorduras": r["gorduras"]
-            })
+            cursor.execute("""
+                SELECT id, categoria, nome, marca, quantidade, unidade_desc, calorias, proteinas, carboidratos, gorduras 
+                FROM diario_refeicoes 
+                WHERE user_id = %s AND data = %s
+            """, (user_id, data))
+            
+            diario = {}
+            for r in cursor.fetchall():
+                cat = r["categoria"]
+                if cat not in diario:
+                    diario[cat] = []
+                diario[cat].append({
+                    "id": r["id"],
+                    "nome": r["nome"],
+                    "marca": r["marca"],
+                    "quantidade": r["quantidade"],
+                    "unidadeDesc": r["unidade_desc"],
+                    "calorias": r["calorias"],
+                    "proteinas": r["proteinas"],
+                    "carboidratos": r["carboidratos"],
+                    "gorduras": r["gorduras"]
+                })
 
     return {
         "metas": metas,
@@ -414,56 +386,56 @@ def obter_dados_usuario(data: str = Query(...), authorization: Optional[str] = H
 @app.post("/api/usuario/metas")
 def salvar_metas(m: MetasModel, authorization: Optional[str] = Header(None)):
     user_id = obter_usuario_por_token(authorization)
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO metas_usuario (user_id, kcal, prot, carb, fat, agua, genero, idade, peso, altura, atividade, objetivo) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET 
-            kcal=excluded.kcal, prot=excluded.prot, carb=excluded.carb, fat=excluded.fat, agua=excluded.agua,
-            genero=excluded.genero, idade=excluded.idade, peso=excluded.peso, altura=excluded.altura,
-            atividade=excluded.atividade, objetivo=excluded.objetivo
-        """, (user_id, m.kcal, m.prot, m.carb, m.fat, m.agua, m.genero, m.idade, m.peso, m.altura, m.atividade, m.objetivo))
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO metas_usuario (user_id, kcal, prot, carb, fat, agua, genero, idade, peso, altura, atividade, objetivo) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT(user_id) DO UPDATE SET 
+                kcal=EXCLUDED.kcal, prot=EXCLUDED.prot, carb=EXCLUDED.carb, fat=EXCLUDED.fat, agua=EXCLUDED.agua,
+                genero=EXCLUDED.genero, idade=EXCLUDED.idade, peso=EXCLUDED.peso, altura=EXCLUDED.altura,
+                atividade=EXCLUDED.atividade, objetivo=EXCLUDED.objetivo
+            """, (user_id, m.kcal, m.prot, m.carb, m.fat, m.agua, m.genero, m.idade, m.peso, m.altura, m.atividade, m.objetivo))
         conn.commit()
     return {"status": "ok"}
 
 @app.post("/api/usuario/agua")
 def salvar_agua(a: AguaModel, authorization: Optional[str] = Header(None)):
     user_id = obter_usuario_por_token(authorization)
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO consumo_agua (user_id, data, quantidade) 
-            VALUES (?, ?, ?)
-            ON CONFLICT(user_id, data) DO UPDATE SET quantidade=excluded.quantidade
-        """, (user_id, a.data, a.quantidade))
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO consumo_agua (user_id, data, quantidade) 
+                VALUES (%s, %s, %s)
+                ON CONFLICT(user_id, data) DO UPDATE SET quantidade=EXCLUDED.quantidade
+            """, (user_id, a.data, a.quantidade))
         conn.commit()
     return {"status": "ok"}
 
 @app.post("/api/usuario/refeicao")
 def adicionar_item_refeicao(item: RegistroRefeicaoModel, authorization: Optional[str] = Header(None)):
     user_id = obter_usuario_por_token(authorization)
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO diario_refeicoes 
-            (user_id, data, categoria, nome, marca, quantidade, unidade_desc, calorias, proteinas, carboidratos, gorduras)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, item.data, item.categoria, item.nome, item.marca, item.quantidade, item.unidade_desc, item.calorias, item.proteinas, item.carboidratos, item.gorduras))
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO diario_refeicoes 
+                (user_id, data, categoria, nome, marca, quantidade, unidade_desc, calorias, proteinas, carboidratos, gorduras)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (user_id, item.data, item.categoria, item.nome, item.marca, item.quantidade, item.unidade_desc, item.calorias, item.proteinas, item.carboidratos, item.gorduras))
+            novo_id = cursor.fetchone()[0]
         conn.commit()
-        novo_id = cursor.lastrowid
     return {"status": "ok", "id": novo_id}
 
 @app.delete("/api/usuario/refeicao/{item_id}")
 def remover_item_refeicao(item_id: int, authorization: Optional[str] = Header(None)):
     user_id = obter_usuario_por_token(authorization)
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM diario_refeicoes WHERE id = ? AND user_id = ?", (item_id, user_id))
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM diario_refeicoes WHERE id = %s AND user_id = %s", (item_id, user_id))
         conn.commit()
     return {"status": "ok"}
 
-# --- BUSCA DE ALIMENTOS & FATSECRET ---
 async def obter_token_fatsecret():
     agora = time.time()
     if token_cache["access_token"] and token_cache["expires_at"] > agora:
@@ -486,12 +458,12 @@ async def obter_token_fatsecret():
 
 @app.post("/api/alimentos")
 def salvar_alimento_manual(item: AlimentoManual):
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
-            VALUES (?, ?, ?, ?, ?, ?, 'MANUAL')
-        """, (item.nome.strip(), item.marca.strip(), round(item.calorias, 1), round(item.proteinas, 1), round(item.carboidratos, 1), round(item.gorduras, 1)))
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
+                VALUES (%s, %s, %s, %s, %s, %s, 'MANUAL')
+            """, (item.nome.strip(), item.marca.strip(), round(item.calorias, 1), round(item.proteinas, 1), round(item.carboidratos, 1), round(item.gorduras, 1)))
         conn.commit()
     return {"status": "sucesso"}
 
@@ -501,15 +473,14 @@ async def buscar_alimentos(q: str = Query(..., min_length=2)):
     palavras_busca = termo_limpo.split()
     resultados_locais = []
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT nome, marca, calorias, proteinas, carboidratos, gorduras, fonte FROM alimentos")
-        for r in cursor.fetchall():
-            n_limpo = remover_acentos(r["nome"])
-            m_limpo = remover_acentos(r["marca"] or "")
-            if all(p in n_limpo or p in m_limpo for p in palavras_busca):
-                resultados_locais.append(dict(r))
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT nome, marca, calorias, proteinas, carboidratos, gorduras, fonte FROM alimentos")
+            for r in cursor.fetchall():
+                n_limpo = remover_acentos(r["nome"])
+                m_limpo = remover_acentos(r["marca"] or "")
+                if all(p in n_limpo or p in m_limpo for p in palavras_busca):
+                    resultados_locais.append(dict(r))
 
     if len(resultados_locais) >= 6:
         return {"origem": "taco_local", "total": len(resultados_locais), "itens": resultados_locais}
@@ -535,45 +506,45 @@ async def buscar_alimentos(q: str = Query(..., min_length=2)):
                     if isinstance(fs_data, dict):
                         fs_data = [fs_data]
 
-                    with sqlite3.connect(DB_PATH) as conn:
-                        cursor = conn.cursor()
-                        for f in fs_data:
-                            nome = f.get("food_name", "").strip()
-                            marca = (f.get("brand_name") or "Genérico").strip()
-                            desc = f.get("food_description", "")
+                    with get_db() as conn:
+                        with conn.cursor() as cursor:
+                            for f in fs_data:
+                                nome = f.get("food_name", "").strip()
+                                marca = (f.get("brand_name") or "Genérico").strip()
+                                desc = f.get("food_description", "")
 
-                            kcal = prot = carb = fat = 0.0
-                            for p in desc.split("-")[-1].split("|"):
-                                p_str = p.lower()
-                                if "calorias:" in p_str:
-                                    kcal = float(''.join(c for c in p_str.split("calorias:")[1].replace("kcal","") if c.isdigit() or c == '.') or 0)
-                                elif "gord:" in p_str:
-                                    fat = float(''.join(c for c in p_str.split("gord:")[1].replace("g","") if c.isdigit() or c == '.') or 0)
-                                elif "carb:" in p_str:
-                                    carb = float(''.join(c for c in p_str.split("carb:")[1].replace("g","") if c.isdigit() or c == '.') or 0)
-                                elif "prot:" in p_str:
-                                    prot = float(''.join(c for c in p_str.split("prot:")[1].replace("g","") if c.isdigit() or c == '.') or 0)
+                                kcal = prot = carb = fat = 0.0
+                                for p in desc.split("-")[-1].split("|"):
+                                    p_str = p.lower()
+                                    if "calorias:" in p_str:
+                                        kcal = float(''.join(c for c in p_str.split("calorias:")[1].replace("kcal","") if c.isdigit() or c == '.') or 0)
+                                    elif "gord:" in p_str:
+                                        fat = float(''.join(c for c in p_str.split("gord:")[1].replace("g","") if c.isdigit() or c == '.') or 0)
+                                    elif "carb:" in p_str:
+                                        carb = float(''.join(c for c in p_str.split("carb:")[1].replace("g","") if c.isdigit() or c == '.') or 0)
+                                    elif "prot:" in p_str:
+                                        prot = float(''.join(c for c in p_str.split("prot:")[1].replace("g","") if c.isdigit() or c == '.') or 0)
 
-                            if kcal > 0 or prot > 0 or carb > 0:
-                                cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = ? AND LOWER(marca) = ?", (nome.lower(), marca.lower()))
-                                if not cursor.fetchone():
-                                    cursor.execute("""
-                                        INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
-                                        VALUES (?, ?, ?, ?, ?, ?, 'FATSECRET')
-                                    """, (nome, marca, round(kcal, 1), round(prot, 1), round(carb, 1), round(fat, 1)))
-                                    conn.commit()
+                                if kcal > 0 or prot > 0 or carb > 0:
+                                    cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = %s AND LOWER(marca) = %s", (nome.lower(), marca.lower()))
+                                    if not cursor.fetchone():
+                                        cursor.execute("""
+                                            INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
+                                            VALUES (%s, %s, %s, %s, %s, %s, 'FATSECRET')
+                                        """, (nome, marca, round(kcal, 1), round(prot, 1), round(carb, 1), round(fat, 1)))
+                                        conn.commit()
 
-                                novos_itens.append({
-                                    "nome": nome,
-                                    "marca": marca,
-                                    "calorias": round(kcal, 1),
-                                    "proteinas": round(prot, 1),
-                                    "carboidratos": round(carb, 1),
-                                    "gorduras": round(fat, 1),
-                                    "fonte": "FATSECRET"
-                                })
+                                    novos_itens.append({
+                                        "nome": nome,
+                                        "marca": marca,
+                                        "calorias": round(kcal, 1),
+                                        "proteinas": round(prot, 1),
+                                        "carboidratos": round(carb, 1),
+                                        "gorduras": round(fat, 1),
+                                        "fonte": "FATSECRET"
+                                    })
         except Exception as e:
-            print(f"Erro na busca FatSecret: {e}")
+            print(f"Erro FatSecret: {e}")
 
     nomes_vistos = set()
     resultado_final = []
