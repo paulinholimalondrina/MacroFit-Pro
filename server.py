@@ -5,7 +5,6 @@ import httpx
 
 app = FastAPI(title="MacroFit Proxy & Cache API")
 
-# Permite que a calculadora no navegador comunique com a API sem bloqueios de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,7 +16,6 @@ app.add_middleware(
 DB_PATH = "alimentos_cache.db"
 
 def init_db():
-    """Cria a tabela SQLite local para guardar o cache dos alimentos."""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -39,15 +37,14 @@ init_db()
 
 @app.get("/")
 def home():
-    """Rota para verificar se a API está online."""
     return {"status": "ok", "mensagem": "MacroFit API está online e pronta!"}
 
 @app.get("/api/alimentos")
 async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome do alimento")):
     termo = q.strip().lower()
-    resultados = []
+    resultados_cache = []
 
-    # 1. Procura primeiro no cache local SQLite
+    # 1. Procura primeiro no SQLite local
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -55,30 +52,37 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
             SELECT nome, marca, calorias, proteinas, carboidratos, gorduras, fonte 
             FROM alimentos 
             WHERE LOWER(nome) LIKE ? 
-            LIMIT 15
+            LIMIT 40
         """, (f"%{termo}%",))
-        rows = cursor.fetchall()
-        for r in rows:
-            resultados.append(dict(r))
+        for r in cursor.fetchall():
+            resultados_cache.append(dict(r))
 
-    # Se já encontrou pelo menos 3 itens locais, devolve logo
-    if len(resultados) >= 3:
-        return {"origem": "local_cache", "total": len(resultados), "itens": resultados}
+    # Se já tiver mais de 8 opções guardadas no cache, devolve imediatamente
+    if len(resultados_cache) >= 8:
+        return {"origem": "local_cache", "total": len(resultados_cache), "itens": resultados_cache}
 
-    # 2. Se não encontrou o suficiente, pesquisa na API externa enviando o User-Agent oficial
+    # 2. Pesquisa ampla na API v2 com ordenação por popularidade
     headers = {
         "User-Agent": "MacroFitPro/1.0 (suporte@macrofit.local)"
     }
+    
+    # Endpoint v2 mais completo, trazendo até 50 produtos com tags do Brasil / Português
     url = (
-        f"https://br.openfoodfacts.org/cgi/search.pl"
-        f"?search_terms={termo}&search_simple=1&action=process&json=1&page_size=12"
-        f"&fields=product_name,brands,nutriments"
+        f"https://world.openfoodfacts.org/api/v2/search"
+        f"?categories_tags_en={termo}"
+        f"&fields=product_name,product_name_pt,brands,nutriments"
+        f"&page_size=50"
+        f"&sort_by=unique_scans_n"
     )
 
     novos_itens = []
     try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            resp = await client.get(url, headers=headers)
+        async with httpx.AsyncClient(timeout=7.0) as client:
+            resp = await client.get(
+                f"https://world.openfoodfacts.org/cgi/search.pl?search_terms={termo}&search_simple=1&action=process&json=1&page_size=40&fields=product_name,product_name_pt,brands,nutriments",
+                headers=headers
+            )
+            
             if resp.status_code == 200:
                 data = resp.json()
                 produtos = data.get("products", [])
@@ -86,38 +90,49 @@ async def buscar_alimentos(q: str = Query(..., min_length=2, description="Nome d
                 with sqlite3.connect(DB_PATH) as conn:
                     cursor = conn.cursor()
                     for p in produtos:
-                        nome = p.get("product_name")
-                        if not nome:
+                        nome = p.get("product_name_pt") or p.get("product_name")
+                        if not nome or len(nome.strip()) < 3:
                             continue
 
-                        marca = p.get("brands", "Genérico") or "Genérico"
+                        marca = p.get("brands") or "Genérico"
                         nutri = p.get("nutriments", {})
 
-                        # Extrai energia e macronutrientes por 100g/100ml
-                        kcal = float(nutri.get("energy-kcal_100g") or nutri.get("energy-kcal") or 0)
-                        prot = float(nutri.get("proteins_100g") or 0)
-                        carb = float(nutri.get("carbohydrates_100g") or 0)
-                        fat = float(nutri.get("fat_100g") or 0)
+                        # Procura valores energéticos em diferentes chaves possíveis
+                        kcal = float(
+                            nutri.get("energy-kcal_100g") or 
+                            nutri.get("energy-kcal_value") or 
+                            nutri.get("energy-kcal") or 
+                            0
+                        )
+                        prot = float(nutri.get("proteins_100g") or nutri.get("proteins_value") or 0)
+                        carb = float(nutri.get("carbohydrates_100g") or nutri.get("carbohydrates_value") or 0)
+                        fat = float(nutri.get("fat_100g") or nutri.get("fat_value") or 0)
 
-                        cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = ?", (nome.lower(),))
+                        # Ignora itens com dados nutricionais totalmente vazios
+                        if kcal == 0 and prot == 0 and carb == 0 and fat == 0:
+                            continue
+
+                        # Guarda no cache SQLite para pesquisas futuras ficarem instantâneas
+                        cursor.execute("SELECT id FROM alimentos WHERE LOWER(nome) = ?", (nome.strip().lower(),))
                         if not cursor.fetchone():
                             cursor.execute("""
                                 INSERT INTO alimentos (nome, marca, calorias, proteinas, carboidratos, gorduras, fonte)
                                 VALUES (?, ?, ?, ?, ?, ?, 'OPEN_FOOD_FACTS')
-                            """, (nome, marca, kcal, prot, carb, fat))
+                            """, (nome.strip(), marca.strip(), kcal, prot, carb, fat))
                             conn.commit()
 
                         novos_itens.append({
-                            "nome": nome,
-                            "marca": marca,
-                            "calorias": kcal,
-                            "proteinas": prot,
-                            "carboidratos": carb,
-                            "gorduras": fat,
+                            "nome": nome.strip(),
+                            "marca": marca.strip(),
+                            "calorias": round(kcal, 1),
+                            "proteinas": round(prot, 1),
+                            "carboidratos": round(carb, 1),
+                            "gorduras": round(fat, 1),
                             "fonte": "OPEN_FOOD_FACTS"
                         })
     except Exception as e:
-        print(f"Erro ao consultar API externa: {e}")
+        print(f"Erro na consulta externa: {e}")
 
-    todos = resultados + novos_itens
+    # Junta o que já estava em cache com os novos dados
+    todos = resultados_cache + novos_itens
     return {"origem": "hibrido", "total": len(todos), "itens": todos}
